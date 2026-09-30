@@ -1,0 +1,16 @@
+# Vagrant
+.vagrant/
+*.log
+
+# 비밀키는 절대 커밋하지 않는다. keys/ 에는 공개키(*.pub)만 둔다.
+keys/*
+!keys/*.pub
+!keys/.gitkeep
+id_*
+!id_*.pub
+*_key
+!*_key.pub
+
+# Ansible
+*.retry
+.vault_pass*
