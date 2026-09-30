@@ -70,18 +70,29 @@ VM은 신규 7대이고, `controlnode`(192.168.56.101, Ansible 제어 노드)는
 # 1~2단계: k8s 3대 + db-01 (autostart: true)
 vagrant up
 
-# 3단계에서
-vagrant up ci-01 sonar-01
+# 3단계에서 (이미 만들어 둔 VM이므로 --provision 을 붙인다. 아래 「공개키 반영」 참고)
+vagrant up --provision ci-01 sonar-01
 
 # 7단계(Wazuh 도입 시)
-vagrant up sec-01
+vagrant up --provision sec-01
 
 vagrant status              # 상태 확인
 vagrant halt <이름>         # 안 쓰는 VM 끄기 (RAM 확보)
 vagrant reload <이름>       # 스펙 변경 반영
-vagrant provision <이름>    # 공개키 변경 반영 (bootstrap.sh 재실행, 여러 번 실행해도 안전)
+vagrant provision <이름>    # 공개키 변경 반영 (켜져 있는 VM만. bootstrap.sh 재실행, 여러 번 실행해도 안전)
 vagrant destroy -f <이름>   # 삭제 후 다시 만들 때
 ```
+
+### 공개키 반영
+
+`bootstrap.sh`는 **VM을 처음 만들 때(`vagrant up`)만 자동 실행**된다. `keys/`에 공개키를 추가하거나 바꾸면
+이미 만들어진 VM에는 저절로 반영되지 않는다.
+
+| 상황 | 명령 |
+|---|---|
+| 켜져 있는 VM | `vagrant provision <이름>` |
+| 꺼져 있는 VM (다시 켜면서 반영) | `vagrant up --provision <이름>` |
+| 스냅샷으로 되돌린 뒤 | 스냅샷 시점의 키로 돌아가므로 `vagrant provision <이름>` 다시 실행 |
 
 ### 접속
 
