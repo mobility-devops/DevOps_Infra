@@ -19,7 +19,7 @@ BOX = "bento/ubuntu-24.04"
 # 두 머신이 같은 박스로 VM 을 만들도록 버전을 고정한다. bootstrap.sh 는 이 박스의 LVM 구성
 # (/dev/ubuntu-vg/ubuntu-lv)을 전제로 한다. 호스트에서 `vagrant box list` 로 확인한 버전을 적는다.
 # 바꾸면 새로 만드는 VM 에만 적용된다(이미 만든 VM 은 그대로).
-BOX_VERSION = ""
+BOX_VERSION = "202510.26.0"
 ADMIN_USER = "devops"
 BRIDGE = "br-lab"
 LAB_MACHINES = { "192.168.56.1" => "host", "192.168.56.2" => "laptop" }.freeze
