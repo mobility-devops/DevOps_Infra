@@ -1,8 +1,0 @@
-# 전체 적용: ansible-playbook site.yml
-# 일부만:    ansible-playbook site.yml --limit k8s-master
-#           ansible-playbook site.yml --tags fail2ban
-- name: 공통 설정 (VM 7대)
-  hosts: vms
-  become: true
-  roles:
-    - common

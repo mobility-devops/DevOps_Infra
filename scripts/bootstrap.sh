@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Vagrant 부트스트랩: Ansible 이 접속할 수 있는 최소 상태만 만든다.
+# Vagrant 부트스트랩: VM 최소 상태만 만든다.
 #   - 시간대 KST
 #   - swap 해제 (kubeadm 요구사항, 재부팅 후에도 유지)
 #   - 관리자 계정(devops) + sudo NOPASSWD
 #   - 공개키 배포 (SSH_PUBKEYS, 줄바꿈으로 구분)
 #   - SSH 호스트 키 재생성 (최초 1회)
 #   - 루트 볼륨 확장 (ROOT_DISK_GB 가 있을 때만, 이미 크면 그대로)
-# chrony, SSH 하드닝, fail2ban, /etc/hosts 등은 Ansible common role 에서 처리한다.
 set -euo pipefail
 
 ADMIN_USER="${ADMIN_USER:-devops}"
@@ -50,12 +49,7 @@ chown "${ADMIN_USER}:${ADMIN_USER}" "${SSH_DIR}/authorized_keys"
 chmod 600 "${SSH_DIR}/authorized_keys"
 
 if [[ -n "${ROOT_DISK_GB:-}" ]]; then
-  # bento/ubuntu-24.04 박스의 LVM 구성을 전제로 한다(Vagrantfile 의 BOX_VERSION 참고).
   ROOT_LV="/dev/ubuntu-vg/ubuntu-lv"
-  if ! lvs "${ROOT_LV}" &>/dev/null; then
-    echo "[bootstrap] 오류: 루트 볼륨 ${ROOT_LV} 이 없습니다. 박스 디스크 구성이 바뀌었는지 확인하세요." >&2
-    exit 1
-  fi
   CUR_GB="$(lvs --noheadings --units g --nosuffix -o lv_size "${ROOT_LV}" | awk '{printf "%d", $1}')"
   if (( CUR_GB < ROOT_DISK_GB )); then
     echo "[bootstrap] 루트 볼륨 ${CUR_GB}GB -> ${ROOT_DISK_GB}GB"

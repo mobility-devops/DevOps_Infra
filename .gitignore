@@ -11,7 +11,3 @@ id_*
 *_key
 !*_key.pub
 
-# Ansible
-*.retry
-.vault_pass*
-ansible/.ansible/
