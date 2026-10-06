@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Vagrant 부트스트랩: Ansible 이 접속할 수 있는 최소 상태만 만든다.
+# Vagrant 부트스트랩: VM 최소 상태만 만든다.
 #   - 시간대 KST
 #   - swap 해제 (kubeadm 요구사항, 재부팅 후에도 유지)
 #   - 관리자 계정(devops) + sudo NOPASSWD
 #   - 공개키 배포 (SSH_PUBKEYS, 줄바꿈으로 구분)
 #   - SSH 호스트 키 재생성 (최초 1회)
 #   - 루트 볼륨 확장 (ROOT_DISK_GB 가 있을 때만, 이미 크면 그대로)
-# chrony, SSH 하드닝, fail2ban, /etc/hosts 등은 Ansible common role 에서 처리한다.
 set -euo pipefail
 
 ADMIN_USER="${ADMIN_USER:-devops}"

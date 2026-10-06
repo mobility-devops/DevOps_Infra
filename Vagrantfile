@@ -82,7 +82,7 @@ Vagrant.configure("2") do |config|
         vb.linked_clone = true
       end
 
-      # Ansible 이 접속할 수 있는 최소 상태만 만든다. 나머지 설정은 Ansible role 에서 한다.
+      # 최소 상태(시간대, swap, devops 계정, 공개키, 디스크)만 만든다.
       node.vm.provision "shell",
                         path: "scripts/bootstrap.sh",
                         env: {

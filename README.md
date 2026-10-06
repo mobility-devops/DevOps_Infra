@@ -1,7 +1,7 @@
 # DevOps_Infra
 
 택시 배차 서비스 DevOps 프로젝트의 **인프라 저장소**.
-물리 서버 2대(호스트 PC, 노트북 서버) 위의 VirtualBox VM을 **Vagrant**로 만들고, 서버 설정은 **Ansible**로 적용한다.
+물리 서버 2대(호스트 PC, 노트북 서버) 위의 VirtualBox VM을 **Vagrant**로 만든다.
 
 > 설계 기준: 노션 「프로젝트 아키텍처」. 전체 내용(CI·CD·앱/DB·모니터링 포함)은
 > **[docs/architecture.md](docs/architecture.md)** 에 옮겨 두었고, 이 README는 인프라 부분만 정리한다.
@@ -11,7 +11,7 @@
 |---|---|
 | DevOps_Backend | 앱 코드, Dockerfile, Jenkinsfile |
 | DevOps_GitOps | 배포 상태(Kustomize, Argo CD) |
-| **DevOps_Infra** (이 저장소) | Vagrantfile, Ansible |
+| **DevOps_Infra** (이 저장소) | Vagrantfile, VM 부트스트랩 스크립트 |
 | DevOps_Docs | 확정 문서, ADR, Runbook |
 
 ---
@@ -39,7 +39,7 @@
 
 - 두 머신의 유선 랜포트를 랜선 한 줄로 직접 연결한다(공유기·스위치 없음). 인터넷은 각 머신의 Wi-Fi로 나간다.
 - 노트북은 덮개를 닫아도 꺼지지 않게(lid 무시) 하고 절전·최대 절전을 끈다.
-- Vagrant는 머신마다 실행하고, **Ansible은 호스트에서만** 실행한다.
+- Vagrant는 머신마다 실행한다.
 
 ## 3. VM 구성
 
@@ -88,7 +88,7 @@
 **원격 접속 (Tailscale)**
 - 호스트 PC 하나만 Subnet Router로 192.168.56.0/24를 팀원에게 연다. VM에는 Tailscale을 깔지 않는다.
 - 노트북에는 Tailscale을 설치하지 않는다(설치해도 `--accept-routes` 금지).
-- 목표: SNAT를 끄고 VM·노트북에 `100.64.0.0/10 via 192.168.56.1` 경로를 넣어 팀원별 IP가 보이게 한다(fail2ban 사람 단위 차단). **Ansible 적용 전까지는 SNAT 켜 둠.**
+- 목표: SNAT를 끄고 VM·노트북에 `100.64.0.0/10 via 192.168.56.1` 경로를 넣어 팀원별 IP가 보이게 한다(fail2ban 사람 단위 차단). **복귀 경로를 넣기 전까지는 SNAT 켜 둠.**
 - 외부에서 들어오는 길은 하나뿐: GitHub → Tailscale Funnel(호스트) → ci-01:8080 `/github-webhook/`.
 
 **포트 요약**
@@ -108,14 +108,14 @@
 | 영역 | 내용 |
 |---|---|
 | 접근 | Tailscale, SSH 키 인증, fail2ban(호스트 .1은 차단 예외). 노트북 OS에도 같은 기준 + ufw |
-| 비밀값 | Sealed Secrets(클러스터), Jenkins Credentials(CI), ansible-vault(Ansible, Sealed Secrets 키·루트 CA 키) |
+| 비밀값 | Sealed Secrets(클러스터), Jenkins Credentials(CI) |
 | 저장소 | public. GitHub secret scanning·push protection |
 | 시간 | chrony |
 | 외부 노출 | `/github-webhook/` 하나만 Funnel, webhook secret으로 서명 확인 |
 
 **저장소 규칙**
 - `keys/`에는 **공개키(`*.pub`)만** 올린다. 비밀키는 각자 PC에만 둔다.
-- 비밀번호, 토큰, `ansible-vault` 비밀번호를 커밋하지 않는다.
+- 비밀번호, 토큰을 커밋하지 않는다.
 
 ## 6. 진행 현황
 
@@ -124,7 +124,6 @@
 | br-lab(호스트·노트북), Tailscale 서브넷 라우터 | ✅ |
 | Vagrant: VM 7대 생성, KST·swap·`devops` 계정·공개키 | ✅ |
 | 머신 재부팅 시 VM 자동 기동(`install-autostart.sh`) | ⏳ 두 머신에서 1회 실행 필요 |
-| Ansible common (chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로) | ⏳ 다음 |
 | Kubernetes(kubeadm, Calico), MySQL, Jenkins | ⏳ |
 | Calico·Argo CD 설치 후 GitOps(App of Apps)로 나머지 | ⏳ |
 | 모니터링(mon-01), 백업·healthchecks cron | ⏳ |
@@ -210,39 +209,12 @@ ssh k8s-master 'hostname; date; swapon --show | wc -l; sudo -n true && echo sudo
 # 기대 결과: 호스트명, KST 시각, swap 0, sudo-ok
 ```
 
-## 8. Ansible (다음 작업)
-
-호스트 PC에서만 실행한다. 대상은 VM 7대 + 노트북 + 호스트 자신. 팀원은 코드를 PR로 올리고, 머지 후 호스트에서 적용한다.
-
-```
-ansible/
-├── ansible.cfg
-├── inventory/hosts.yml
-├── group_vars/{all.yml, vault.yml}
-├── site.yml
-└── roles/{common, host, k8s_node, k8s_master, k8s_worker, mysql, jenkins, monitoring}
-```
-
-| 순서 | role | 내용 |
-|---|---|---|
-| 1 | common | chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로 → 호스트 SNAT 끔 |
-| 1 | host | 호스트·노트북: node_exporter. 노트북: ufw, fail2ban |
-| 2 | k8s_node / master / worker | containerd, kubeadm(node-ip=eth1, pod CIDR 10.244.0.0/16, serverTLSBootstrap), zone 라벨 |
-| 2 | mysql | MySQL 8.4, `taxi_dev`·`taxi_prod`, utf8mb4, ufw 3306은 .22~.24만, mysqld_exporter |
-| 2 | jenkins | Docker, Jenkins(JCasC), 동시 빌드 1개 |
-| 3 | k8s_master | Calico(`interface=eth1`) → Argo CD → 루트 Application |
-| 3 | monitoring | Prometheus(30일), Alertmanager→Slack, Grafana, Loki(7일) |
-| 4 | host | healthchecks.io cron, DB 백업 cron |
-
-- `authorized_keys`는 Ansible에서 건드리지 않는다(`keys/` + `vagrant provision`으로만 관리).
-- SSH 하드닝 전에 `devops` 키 로그인을 먼저 확인한다.
-
-## 9. 브랜치 규칙
+## 8. 브랜치 규칙
 
 - `main` 하나. `feature/<번호>-<내용>` 브랜치 → PR(승인 1명) → **Squash** 머지. `main`에 직접 push하지 않는다.
 - 브랜치명에 `#`을 넣지 않는다.
 
-## 10. 파일 구성
+## 9. 파일 구성
 
 | 경로 | 설명 |
 |---|---|
@@ -252,7 +224,6 @@ ansible/
 | `keys/` | 팀원 공개키(`*.pub`)만 |
 | `docs/architecture.md` | 노션 「프로젝트 아키텍처」 전체 사본 |
 | `docs/*.png` | 아키텍처 그림 (전체, VM 배치, 네트워크, CD, 모니터링) |
-| `ansible/` | (예정) 서버 설정 |
 
 ## 알아둘 점
 - **스냅샷:** `vagrant snapshot save <이름> base-clean`으로 초기 상태를 저장해 두면 복구가 쉽다. 같은 디스크에 저장되므로 백업은 아니다.
