@@ -50,7 +50,12 @@ chown "${ADMIN_USER}:${ADMIN_USER}" "${SSH_DIR}/authorized_keys"
 chmod 600 "${SSH_DIR}/authorized_keys"
 
 if [[ -n "${ROOT_DISK_GB:-}" ]]; then
+  # bento/ubuntu-24.04 박스의 LVM 구성을 전제로 한다(Vagrantfile 의 BOX_VERSION 참고).
   ROOT_LV="/dev/ubuntu-vg/ubuntu-lv"
+  if ! lvs "${ROOT_LV}" &>/dev/null; then
+    echo "[bootstrap] 오류: 루트 볼륨 ${ROOT_LV} 이 없습니다. 박스 디스크 구성이 바뀌었는지 확인하세요." >&2
+    exit 1
+  fi
   CUR_GB="$(lvs --noheadings --units g --nosuffix -o lv_size "${ROOT_LV}" | awk '{printf "%d", $1}')"
   if (( CUR_GB < ROOT_DISK_GB )); then
     echo "[bootstrap] 루트 볼륨 ${CUR_GB}GB -> ${ROOT_DISK_GB}GB"
