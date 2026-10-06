@@ -147,8 +147,8 @@ ssh-keygen -t ed25519 -C "이름@devops"      # 비밀키는 절대 공유하지
 
 ### 7-3. VM 실행
 ```bash
-vagrant up                  # 호스트: 6대 / 노트북: k8s-worker3 (br-lab 주소 .1/.2로 자동 구분)
-LAB_MACHINE=laptop vagrant up   # 직접 고를 때 (host | laptop). br-lab 주소로 알 수 없으면 중단된다
+vagrant up                  # 호스트: 6대 / 노트북: k8s-worker3 (호스트 이름으로 자동 구분)
+LAB_MACHINE=laptop vagrant up   # 강제로 고를 때 (host | laptop)
 
 vagrant status
 vagrant halt <이름>
@@ -156,12 +156,9 @@ vagrant reload <이름>       # 스펙 변경 반영
 vagrant destroy -f <이름>
 ```
 
-- **박스 버전:** `Vagrantfile`의 `BOX_VERSION`에 두 머신이 쓰는 bento 박스 버전을 적는다(`vagrant box list`로 확인).
-  지금 값은 `202510.26.0`. 비어 있으면 매번 경고가 나온다. 바꾸면 새로 만드는 VM에만 적용된다.
-
 ### 7-4. 재부팅 시 자동 기동 (각 머신 1회)
 ```bash
-./scripts/install-autostart.sh      # systemd 서비스 vagrant-vms 등록 (br-lab 주소로 host/laptop을 정해 서비스에 고정)
+./scripts/install-autostart.sh      # systemd 서비스 vagrant-vms 등록
 systemctl status vagrant-vms
 ```
 - 재부팅 후 VM이 차례로 뜨는 데 몇 분 걸린다. 그동안 `activating (start)`로 보인다.
@@ -249,7 +246,7 @@ ansible/
 
 | 경로 | 설명 |
 |---|---|
-| `Vagrantfile` | VM 7대 정의. 머신(host/laptop)을 br-lab 주소로 구분, 박스 버전 고정, 스펙, IP, SSH 포트(2201~2208) |
+| `Vagrantfile` | VM 7대 정의. 머신(host/laptop) 자동 구분, 스펙, IP, SSH 포트(2201~2208) |
 | `scripts/bootstrap.sh` | 최소 부트스트랩: KST, swap 해제, SSH 호스트 키 재생성, `devops` 계정, sudo NOPASSWD, 공개키 배포, 루트 볼륨 확장 |
 | `scripts/install-autostart.sh` | 머신 재부팅 시 VM 자동 기동(systemd) 등록 |
 | `keys/` | 팀원 공개키(`*.pub`)만 |
