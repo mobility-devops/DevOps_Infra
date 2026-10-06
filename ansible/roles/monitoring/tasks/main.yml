@@ -1,0 +1,7 @@
+# monitoring role — 대상: mon-01
+# 할 일(README §8):
+#   - Prometheus(30일)
+#   - Alertmanager → Slack
+#   - Grafana
+#   - Loki(7일)
+[]

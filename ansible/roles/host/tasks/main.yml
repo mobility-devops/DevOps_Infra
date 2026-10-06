@@ -1,0 +1,6 @@
+# host role — 대상: 물리 머신(호스트·노트북)
+# 할 일(README §8):
+#   - node_exporter
+#   - 노트북: ufw, fail2ban, Tailscale 복귀 경로
+#   - 호스트: healthchecks.io cron, DB 백업 cron
+[]

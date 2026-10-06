@@ -1,0 +1,6 @@
+# jenkins role — 대상: ci-01
+# 할 일(README §8):
+#   - Docker
+#   - Jenkins(JCasC)
+#   - 동시 빌드 1개
+[]

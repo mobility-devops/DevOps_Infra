@@ -1,0 +1,6 @@
+# k8s_node role — 대상: Kubernetes 노드 공통(master·worker)
+# 할 일(README §8):
+#   - containerd
+#   - kubeadm·kubelet·kubectl
+#   - kubelet node-ip=eth1
+[]

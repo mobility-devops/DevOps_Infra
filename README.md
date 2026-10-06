@@ -124,8 +124,8 @@
 | br-lab(호스트·노트북), Tailscale 서브넷 라우터 | ✅ |
 | Vagrant: VM 7대 생성, KST·swap·`devops` 계정·공개키 | ✅ |
 | 머신 재부팅 시 VM 자동 기동(`install-autostart.sh`) | ⏳ 두 머신에서 1회 실행 필요 |
-| Ansible 뼈대(inventory, ansible.cfg) + common role (chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로) | 🛠 코드 작성, VM 적용 전 |
-| 호스트 SNAT 끄기(노트북 복귀 경로 포함) | ⏳ common 적용 + host role 후 |
+| Ansible 뼈대: ansible.cfg, inventory, group_vars, site.yml, role 8개 빈 틀 | ✅ |
+| Ansible common (chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로) | ⏳ 다음 |
 | Kubernetes(kubeadm, Calico), MySQL, Jenkins | ⏳ |
 | Calico·Argo CD 설치 후 GitOps(App of Apps)로 나머지 | ⏳ |
 | 모니터링(mon-01), 백업·healthchecks cron | ⏳ |
@@ -217,6 +217,7 @@ ssh k8s-master 'hostname; date; swapon --show | wc -l; sudo -n true && echo sudo
 ## 8. Ansible
 
 호스트 PC에서만 실행한다. 대상은 VM 7대 + 노트북 + 호스트 자신. 팀원은 코드를 PR로 올리고, 머지 후 호스트에서 적용한다.
+**지금은 뼈대만 있다.** 접속 설정과 인벤토리는 동작하고, role 은 모두 빈 틀이라 실행해도 바뀌는 것이 없다.
 
 ```
 ansible/
@@ -224,10 +225,10 @@ ansible/
 ├── .ansible-lint
 ├── inventory/hosts.yml         # vms(ci, k8s_master, k8s_workers, db, mon) + machines(lab-host, lab-laptop)
 ├── group_vars/all.yml          # br-lab 대역, eth1, 호스트 .1, Tailscale 대역
-├── site.yml                    # 지금은 vms 에 common 만 적용
-└── roles/common                # ✅ 작성됨
+├── site.yml                    # 그룹별 play 8개 (role 하나씩)
+└── roles/<role>/{tasks,handlers,defaults}/main.yml   # 빈 틀. tasks/main.yml 맨 위에 할 일 목록
 ```
-`group_vars/vault.yml`과 나머지 role(host, k8s_*, mysql, jenkins, monitoring)은 아직 없다.
+`group_vars/vault.yml`(ansible-vault)은 비밀값이 필요해질 때 만든다.
 
 ### 8-1. 실행
 ```bash
@@ -235,45 +236,29 @@ sudo apt install ansible-core     # 호스트 PC, 1회
 cd ansible
 ansible vms -m ping               # 7대 모두 pong 이어야 한다
 ansible-playbook site.yml --check --diff     # 바뀔 내용 미리 보기
-ansible-playbook site.yml                    # 적용
-ansible-playbook site.yml --limit k8s-worker3 --tags fail2ban   # 일부만
+ansible-playbook site.yml --limit k8s-master # 일부만
 ```
-- 처음 `--check`에서는 아직 설치되지 않은 패키지(chrony, fail2ban, node_exporter)의 설정 단계를 건너뛴다. 설치 후에는 모두 미리 볼 수 있다.
 - Ansible 키(`keys/ansible.pub`의 짝)가 `~/.ssh/ansible_key`가 아니면 `ANSIBLE_PRIVATE_KEY_FILE=<경로>`를 붙인다.
 - 처음 보는 VM 호스트 키는 자동으로 받는다. VM을 다시 만들어 키가 바뀌면 `ssh-keygen -R 192.168.56.xx` 후 다시 실행한다.
+- 노트북(`lab-laptop`)은 관리 계정을 `inventory/hosts.yml`에 적기 전까지 접속되지 않는다(`machines` play).
 
-### 8-2. common role
-| 태그 | 내용 |
-|---|---|
-| (항상) | 접속 계정이 `AllowUsers`에 있는지, eth1에 인벤토리 주소가 있는지 먼저 확인. 아니면 멈춤(잠금 방지) |
-| `chrony` | chrony 설치·실행(timesyncd 대체, Ubuntu 기본 NTS 서버). 시간대가 KST가 아니면 맞춤 |
-| `hosts` | `/etc/hosts`에 인벤토리 전체(VM 7대, `lab-host`, `lab-laptop`) 등록 |
-| `ssh` | `sshd_config.d/10-hardening.conf`: root 로그인·비밀번호 로그인 금지, 키 인증만, `AllowUsers devops vagrant` |
-| `fail2ban` | sshd jail, journald 읽기, 호스트 .1 차단 예외(5회/10분 → 1시간) |
-| `node_exporter` | Ubuntu 패키지, eth1 주소 `:9100`에서만 수신 |
-| `tailscale` | `100.64.0.0/10 via 192.168.56.1 dev eth1` 경로(지금 바로 + netplan `60-tailscale-route.yaml`로 재부팅 후에도) |
+### 8-2. role 과 할 일
+| 순서 | role | 대상 | 할 일 |
+|---|---|---|---|
+| 1 | common | VM 7대 | chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로 |
+| 1 | host | 호스트·노트북 | node_exporter. 노트북: ufw, fail2ban, Tailscale 복귀 경로 |
+| 2 | k8s_node | master·worker | containerd, kubeadm·kubelet(node-ip=eth1) |
+| 2 | k8s_master | k8s-master | kubeadm init(pod CIDR 10.244.0.0/16, serverTLSBootstrap) |
+| 2 | k8s_worker | worker 3대 | kubeadm join, zone 라벨 |
+| 2 | mysql | db-01 | MySQL 8.4, `taxi_dev`·`taxi_prod`, utf8mb4, ufw 3306은 .22~.24만, mysqld_exporter |
+| 2 | jenkins | ci-01 | Docker, Jenkins(JCasC), 동시 빌드 1개 |
+| 3 | k8s_master | k8s-master | Calico(`interface=eth1`) → Argo CD → 루트 Application |
+| 3 | monitoring | mon-01 | Prometheus(30일), Alertmanager→Slack, Grafana, Loki(7일) |
+| 4 | host | 호스트 | healthchecks.io cron, DB 백업 cron |
 
-- `vagrant` 계정은 `vagrant ssh`·`vagrant provision`(공개키 배포)에 필요해서 허용한다. 빼면 키 배포가 안 된다.
 - `authorized_keys`는 Ansible에서 건드리지 않는다(`keys/` + `vagrant provision`으로만 관리).
-
-### 8-3. 호스트 SNAT 끄기 (common 적용 후)
-VM 7대에 복귀 경로가 들어가도 **노트북(.2)에는 아직 없다**(host role 예정). 노트북까지 경로를 넣은 뒤에 끈다.
-```bash
-ssh k8s-worker3 'ip route show 100.64.0.0/10'     # 모든 VM·노트북에서 via 192.168.56.1 확인
-sudo tailscale set --snat-subnet-routes=false      # 호스트 PC
-# 되돌리기: sudo tailscale set --snat-subnet-routes=true
-```
-
-### 8-4. 앞으로 만들 role
-| 순서 | role | 내용 |
-|---|---|---|
-| 1 | host | 호스트·노트북: node_exporter. 노트북: ufw, fail2ban, Tailscale 복귀 경로 |
-| 2 | k8s_node / master / worker | containerd, kubeadm(node-ip=eth1, pod CIDR 10.244.0.0/16, serverTLSBootstrap), zone 라벨 |
-| 2 | mysql | MySQL 8.4, `taxi_dev`·`taxi_prod`, utf8mb4, ufw 3306은 .22~.24만, mysqld_exporter |
-| 2 | jenkins | Docker, Jenkins(JCasC), 동시 빌드 1개 |
-| 3 | k8s_master | Calico(`interface=eth1`) → Argo CD → 루트 Application |
-| 3 | monitoring | Prometheus(30일), Alertmanager→Slack, Grafana, Loki(7일) |
-| 4 | host | healthchecks.io cron, DB 백업 cron |
+- SSH 하드닝 전에 `devops` 키 로그인을 먼저 확인한다. `vagrant` 계정은 `vagrant provision`(키 배포)에 필요하므로 막지 않는다.
+- 호스트 Tailscale SNAT 는 모든 VM과 노트북에 복귀 경로가 들어간 뒤에 끈다(`sudo tailscale set --snat-subnet-routes=false`).
 
 ## 9. 브랜치 규칙
 
@@ -290,7 +275,7 @@ sudo tailscale set --snat-subnet-routes=false      # 호스트 PC
 | `keys/` | 팀원 공개키(`*.pub`)만 |
 | `docs/architecture.md` | 노션 「프로젝트 아키텍처」 전체 사본 |
 | `docs/*.png` | 아키텍처 그림 (전체, VM 배치, 네트워크, CD, 모니터링) |
-| `ansible/` | 서버 설정. 지금은 inventory, ansible.cfg, common role (§8) |
+| `ansible/` | 서버 설정 뼈대. inventory, ansible.cfg, role 8개 빈 틀 (§8) |
 
 ## 알아둘 점
 - **스냅샷:** `vagrant snapshot save <이름> base-clean`으로 초기 상태를 저장해 두면 복구가 쉽다. 같은 디스크에 저장되므로 백업은 아니다.
