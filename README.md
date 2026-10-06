@@ -3,8 +3,8 @@
 택시 배차 서비스 DevOps 프로젝트의 **인프라 저장소**.
 물리 서버 2대(호스트 PC, 노트북 서버) 위에 VirtualBox VM 7대를 **Vagrant**로 만든다.
 
-> 전체 설계(CI·CD·앱·모니터링·보안)는 [docs/architecture.md](docs/architecture.md)(노션 「프로젝트 아키텍처」 사본)에 있다.
-> 서로 다르면 노션이 기준이다.
+> 전체 설계(CI·CD·앱·모니터링·보안)는 DevOps_Docs의 [프로젝트 아키텍처](https://github.com/mobility-devops/DevOps_Docs/blob/main/architecture/project-architecture.md)에 있다.
+> 서로 다르면 노션 「프로젝트 아키텍처」가 기준이다.
 
 ## 파일 구성
 
@@ -14,7 +14,7 @@
 | `scripts/bootstrap.sh` | VM 최초 설정: KST, swap 해제, SSH 호스트 키 재생성, `devops` 계정(sudo NOPASSWD), 공개키 배포, 루트 볼륨 확장 |
 | `scripts/install-autostart.sh` | 머신 재부팅 시 VM 자동 기동·정상 종료(systemd `vagrant-vms`) 등록 |
 | `keys/` | 팀원 공개키(`*.pub`)만 |
-| `docs/` | 아키텍처 문서와 그림 |
+| `docs/` | README 그림 |
 
 ## VM 구성
 
