@@ -15,6 +15,7 @@
   ansible.builtin.command: ip -4 route show {{ tailscale_cidr }}
   register: tailscale_route_now
   changed_when: false
+  check_mode: false
 
 - name: 복귀 경로 (지금 바로 적용)
   ansible.builtin.command: ip -4 route replace {{ tailscale_cidr }} via {{ lab_host_ip }} dev {{ lab_iface }}

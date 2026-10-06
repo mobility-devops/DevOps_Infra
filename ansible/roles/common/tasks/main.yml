@@ -9,8 +9,24 @@
     cache_valid_time: 3600
   tags: [chrony, fail2ban]
 
+# 추천 패키지(smartmontools 등 수집기)는 깔지 않는다.
+- name: 패키지 (node_exporter)
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [node_exporter]
+
+# --check 에서는 위 설치가 실제로 일어나지 않는다. 아직 없는 패키지의 설정·서비스 단계는 건너뛴다.
+- name: 설치된 패키지 확인
+  ansible.builtin.package_facts:
+  when: ansible_check_mode
+  tags: [always]
+
 - name: 시간 (chrony)
   ansible.builtin.import_tasks: chrony.yml
+  when: not ansible_check_mode or 'chrony' in ansible_facts.packages
   tags: [chrony]
 
 - name: /etc/hosts
@@ -23,10 +39,12 @@
 
 - name: fail2ban
   ansible.builtin.import_tasks: fail2ban.yml
+  when: not ansible_check_mode or 'fail2ban' in ansible_facts.packages
   tags: [fail2ban]
 
 - name: node_exporter
   ansible.builtin.import_tasks: node_exporter.yml
+  when: not ansible_check_mode or 'prometheus-node-exporter' in ansible_facts.packages
   tags: [node_exporter]
 
 - name: Tailscale 복귀 경로

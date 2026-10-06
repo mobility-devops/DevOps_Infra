@@ -1,11 +1,4 @@
-# Ubuntu 패키지(prometheus-node-exporter)를 쓴다. 추천 패키지(smartmontools 등 수집기)는 깔지 않는다.
-- name: node_exporter 설치
-  ansible.builtin.apt:
-    name: prometheus-node-exporter
-    install_recommends: false
-    update_cache: true
-    cache_valid_time: 3600
-
+# Ubuntu 패키지(prometheus-node-exporter)를 쓴다. 설치는 tasks/main.yml.
 - name: node_exporter 수신 주소
   ansible.builtin.lineinfile:
     path: /etc/default/prometheus-node-exporter
