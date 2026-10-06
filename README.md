@@ -1,7 +1,7 @@
 # DevOps_Infra
 
 택시 배차 서비스 DevOps 프로젝트의 인프라 저장소.
-개인 PC 한 대 위의 VirtualBox VM을 **Vagrant**로 만들고, 서버 설정은 **Ansible**로 적용한다.
+물리 서버 2대(호스트 PC, 노트북 서버) 위의 VirtualBox VM을 **Vagrant**로 만들고, 서버 설정은 **Ansible**로 적용한다.
 
 | 저장소 | 역할 |
 |---|---|
@@ -24,24 +24,32 @@
 
 ## VM 구성
 
-Host-Only 네트워크(`vboxnet0`, 192.168.56.0/24)로 서로 통신한다. 호스트는 `.1`.
-VM은 신규 7대이고, `controlnode`(192.168.56.101, Ansible 제어 노드)는 기존 VM이라 Vagrant로 만들지 않는다.
+두 머신을 랜선으로 직접 잇고, 각 머신의 리눅스 브리지 `br-lab`(192.168.56.0/24)에 VM을 붙인다.
+호스트 PC는 `.1`, 노트북 서버는 `.2`. 인터넷은 각 머신의 Wi-Fi(VM은 NAT 어댑터)로 나간다.
 
-| VM | 역할 | vCPU | RAM | Host-Only IP | SSH 포워딩 | 기본 기동 |
+| VM | 머신 | 역할 | vCPU | RAM | IP | SSH 포워딩 |
 |---|---|---|---|---|---|---|
-| ci-01 | Jenkins, Docker | 2 | 6GB | 192.168.56.11 | 2201 | 아니오 (3단계) |
-| sonar-01 | SonarQube | 2 | 4GB | 192.168.56.12 | 2202 | 아니오 (3단계) |
-| k8s-master | Kubernetes Control Plane | 2 | 4GB | 192.168.56.21 | 2203 | 예 |
-| k8s-worker1 | 앱, Ingress, Argo CD | 4 | 6GB | 192.168.56.22 | 2204 | 예 |
-| k8s-worker2 | 앱, 모니터링 | 4 | 8GB | 192.168.56.23 | 2205 | 예 |
-| db-01 | MySQL 8 | 2 | 3GB | 192.168.56.31 | 2206 | 예 |
-| sec-01 | Wazuh | 4 | 8GB | 192.168.56.41 | 2207 | 아니오 (7단계) |
+| ci-01 | 호스트 | Jenkins, Docker | 2 | 8GB | 192.168.56.11 | 2201 |
+| k8s-master | 호스트 | Kubernetes Control Plane | 2 | 4GB | 192.168.56.21 | 2203 |
+| k8s-worker1 | 호스트 | 앱, Gateway, 플랫폼 도구 | 4 | 8GB | 192.168.56.22 | 2204 |
+| k8s-worker2 | 호스트 | 앱, Gateway, 플랫폼 도구 | 4 | 8GB | 192.168.56.23 | 2205 |
+| db-01 | 호스트 | MySQL 8.4 LTS | 2 | 3GB | 192.168.56.31 | 2206 |
+| mon-01 | 호스트 | Prometheus, Alertmanager, Grafana, Loki | 2 | 4GB | 192.168.56.41 | 2207 |
+| k8s-worker3 | 노트북 | 앱, Gateway, 플랫폼 도구 | 4 | 10GB | 192.168.56.24 | 2208 |
 
-- 신규 7대 RAM 합계 39GB, controlnode(2GB로 축소)까지 41GB. 호스트 RAM(62GiB)에 여유를 두기 위해
-  **필요한 VM만 켠다.** 기본 `vagrant up`은 4대(21GB)만 올린다.
-- 스펙은 노션 「아키텍처 개요」 3장 「자원 운영 방안」 조정안 기준이다. 부족하면 `Vagrantfile`의 `VMS`에서 값을 고친 뒤
-  `vagrant reload <이름>` 한다.
+- 같은 `Vagrantfile`을 두 머신에서 쓴다. 호스트 이름이 `laptop`으로 시작하면 노트북 몫(worker3)만,
+  아니면 호스트 몫(6대)만 정의한다. 강제로 고르려면 `LAB_MACHINE=host|laptop vagrant up`.
 - 디스크 크기는 `Vagrantfile`에서 강제하지 않는다(박스 기본 디스크, 동적 할당).
+
+## br-lab 만들기 (두 머신 공통, VM 기동 전에)
+
+`br-lab`이 없으면 `vagrant up`이 실패한다. 구성: 유선 랜포트 + `dummy0`(랜선이 빠져도 br-lab 유지),
+고정 IP, **기본 게이트웨이 없음**, DHCP 없음. 예전 Host-Only `vboxnet0`은 같은 대역이라 지운다.
+
+- 노트북(Ubuntu Server, netplan): `/etc/netplan/60-br-lab.yaml`에 `ethernets`(랜포트 dhcp 끔) +
+  `dummy-devices: dummy0` + `bridges: br-lab`(addresses 192.168.56.2/24) → `sudo netplan try`
+- 호스트(Ubuntu Desktop, NetworkManager): `nmcli`로 bridge `br-lab`(192.168.56.1/24) +
+  랜포트·`dummy0`을 포트로 추가
 
 ## 사전 준비 (호스트 PC)
 
@@ -67,14 +75,8 @@ VM은 신규 7대이고, `controlnode`(192.168.56.101, Ansible 제어 노드)는
 ## 사용법
 
 ```bash
-# 1~2단계: k8s 3대 + db-01 (autostart: true)
+# 호스트 PC: 6대 / 노트북 서버: k8s-worker3
 vagrant up
-
-# 3단계에서 (이미 만들어 둔 VM이므로 --provision 을 붙인다. 아래 「공개키 반영」 참고)
-vagrant up --provision ci-01 sonar-01
-
-# 7단계(Wazuh 도입 시)
-vagrant up --provision sec-01
 
 vagrant status              # 상태 확인
 vagrant halt <이름>         # 안 쓰는 VM 끄기 (RAM 확보)
@@ -97,7 +99,7 @@ vagrant destroy -f <이름>   # 삭제 후 다시 만들 때
 ### 접속
 
 ```bash
-# 호스트에서 (Host-Only IP)
+# 호스트에서 (br-lab IP)
 ssh -i ~/.ssh/id_devops devops@192.168.56.21
 # 또는 localhost 포워딩
 ssh -i ~/.ssh/id_devops -p 2203 devops@127.0.0.1
@@ -116,7 +118,7 @@ ssh -i ~/.ssh/id_devops devops@192.168.56.21 'hostname; date; swapon --show | wc
 
 | 경로 | 설명 |
 |---|---|
-| `Vagrantfile` | VM 7대 정의(스펙, IP, SSH 포트, autostart) |
+| `Vagrantfile` | VM 7대 정의(머신 구분, 스펙, IP, SSH 포트) |
 | `scripts/bootstrap.sh` | 최소 부트스트랩: KST, swap 해제, `devops` 계정, sudo NOPASSWD, 공개키 배포 |
 | `keys/` | 공개키(`*.pub`)만. 팀원별 키 + controlnode Ansible 키 |
 
@@ -126,7 +128,7 @@ Kubernetes·MySQL 설치는 Ansible role로 적용한다(다음 작업).
 ## 알아둘 점
 
 - **SSH 포트:** Vagrant 기본 포워딩(2222)은 기존 NAT Network 포트포워딩(1111/2222/3333)과 겹쳐서
-  VM마다 2201~2207을 명시했다.
-- **Kubernetes 노드 IP:** 모든 VM의 NAT 어댑터가 10.0.2.15라서, kubeadm/kubelet에는 Host-Only IP를 반드시 명시한다(2단계).
+  VM마다 2201~2208을 명시했다.
+- **Kubernetes 노드 IP:** 모든 VM의 NAT 어댑터가 10.0.2.15라서, kubeadm/kubelet/Calico에는 br-lab IP를 반드시 명시한다.
 - **스냅샷:** `vagrant snapshot save <이름> base-clean`으로 초기 상태를 저장해 두면 실험 후 복구가 쉽다.
   스냅샷은 같은 디스크에 저장되므로 백업이 아니다.
