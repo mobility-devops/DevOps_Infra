@@ -1,0 +1,13 @@
+# Ubuntu 패키지(prometheus-node-exporter)를 쓴다. 설치는 tasks/main.yml.
+- name: node_exporter 수신 주소
+  ansible.builtin.lineinfile:
+    path: /etc/default/prometheus-node-exporter
+    regexp: '^ARGS='
+    line: 'ARGS="--web.listen-address={{ node_exporter_listen }}"'
+  notify: Restart node_exporter
+
+- name: node_exporter 실행
+  ansible.builtin.service:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true

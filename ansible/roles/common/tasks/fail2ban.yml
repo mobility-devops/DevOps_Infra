@@ -1,0 +1,14 @@
+- name: fail2ban 설정
+  ansible.builtin.template:
+    src: fail2ban-lab.local.j2
+    dest: /etc/fail2ban/jail.d/lab.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: fail2ban 실행
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true

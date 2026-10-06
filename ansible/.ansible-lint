@@ -1,0 +1,5 @@
+# 작업 이름을 한국어로 쓰므로 대문자 시작 규칙은 끈다.
+# role 변수는 기능 이름(fail2ban_, node_exporter_ 등)을 앞에 붙이고 common_ 접두어는 쓰지 않는다.
+skip_list:
+  - name[casing]
+  - var-naming[no-role-prefix]

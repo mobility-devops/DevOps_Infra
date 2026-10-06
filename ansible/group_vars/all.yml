@@ -1,0 +1,11 @@
+# 모든 대상 공통 값. 비밀값은 여기 두지 않는다(group_vars/vault.yml, ansible-vault).
+
+timezone: Asia/Seoul
+
+# 내부망 br-lab. VM 에서는 eth1(eth0 은 Vagrant NAT).
+lab_cidr: 192.168.56.0/24
+lab_iface: eth1
+lab_host_ip: 192.168.56.1   # 호스트 PC. Tailscale Subnet Router 이자 Ansible 실행 위치
+
+# Tailscale(CGNAT) 대역. 팀원 접속이 이 대역에서 호스트를 거쳐 들어온다.
+tailscale_cidr: 100.64.0.0/10

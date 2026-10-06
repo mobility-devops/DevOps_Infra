@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+network:
+  version: 2
+  ethernets:
+    {{ lab_iface }}:
+      routes:
+        - to: {{ tailscale_cidr }}
+          via: {{ lab_host_ip }}

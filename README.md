@@ -124,7 +124,8 @@
 | br-lab(호스트·노트북), Tailscale 서브넷 라우터 | ✅ |
 | Vagrant: VM 7대 생성, KST·swap·`devops` 계정·공개키 | ✅ |
 | 머신 재부팅 시 VM 자동 기동(`install-autostart.sh`) | ⏳ 두 머신에서 1회 실행 필요 |
-| Ansible common (chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로) | ⏳ 다음 |
+| Ansible 뼈대(inventory, ansible.cfg) + common role (chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로) | 🛠 코드 작성, VM 적용 전 |
+| 호스트 SNAT 끄기(노트북 복귀 경로 포함) | ⏳ common 적용 + host role 후 |
 | Kubernetes(kubeadm, Calico), MySQL, Jenkins | ⏳ |
 | Calico·Argo CD 설치 후 GitOps(App of Apps)로 나머지 | ⏳ |
 | 모니터링(mon-01), 백업·healthchecks cron | ⏳ |
@@ -147,8 +148,8 @@ ssh-keygen -t ed25519 -C "이름@devops"      # 비밀키는 절대 공유하지
 
 ### 7-3. VM 실행
 ```bash
-vagrant up                  # 호스트: 6대 / 노트북: k8s-worker3 (호스트 이름으로 자동 구분)
-LAB_MACHINE=laptop vagrant up   # 강제로 고를 때 (host | laptop)
+vagrant up                  # 호스트: 6대 / 노트북: k8s-worker3 (br-lab 주소 .1/.2로 자동 구분)
+LAB_MACHINE=laptop vagrant up   # 직접 고를 때 (host | laptop). br-lab 주소로 알 수 없으면 중단된다
 
 vagrant status
 vagrant halt <이름>
@@ -156,9 +157,12 @@ vagrant reload <이름>       # 스펙 변경 반영
 vagrant destroy -f <이름>
 ```
 
+- **박스 버전:** `Vagrantfile`의 `BOX_VERSION`에 두 머신이 쓰는 bento 박스 버전을 적는다(`vagrant box list`로 확인).
+  지금 값은 `202510.26.0`. 비어 있으면 매번 경고가 나온다. 바꾸면 새로 만드는 VM에만 적용된다.
+
 ### 7-4. 재부팅 시 자동 기동 (각 머신 1회)
 ```bash
-./scripts/install-autostart.sh      # systemd 서비스 vagrant-vms 등록
+./scripts/install-autostart.sh      # systemd 서비스 vagrant-vms 등록 (br-lab 주소로 host/laptop을 정해 서비스에 고정)
 systemctl status vagrant-vms
 ```
 - 재부팅 후 VM이 차례로 뜨는 데 몇 분 걸린다. 그동안 `activating (start)`로 보인다.
@@ -210,32 +214,66 @@ ssh k8s-master 'hostname; date; swapon --show | wc -l; sudo -n true && echo sudo
 # 기대 결과: 호스트명, KST 시각, swap 0, sudo-ok
 ```
 
-## 8. Ansible (다음 작업)
+## 8. Ansible
 
 호스트 PC에서만 실행한다. 대상은 VM 7대 + 노트북 + 호스트 자신. 팀원은 코드를 PR로 올리고, 머지 후 호스트에서 적용한다.
 
 ```
 ansible/
-├── ansible.cfg
-├── inventory/hosts.yml
-├── group_vars/{all.yml, vault.yml}
-├── site.yml
-└── roles/{common, host, k8s_node, k8s_master, k8s_worker, mysql, jenkins, monitoring}
+├── ansible.cfg                 # inventory, remote_user=devops, 키 ~/.ssh/ansible_key
+├── .ansible-lint
+├── inventory/hosts.yml         # vms(ci, k8s_master, k8s_workers, db, mon) + machines(lab-host, lab-laptop)
+├── group_vars/all.yml          # br-lab 대역, eth1, 호스트 .1, Tailscale 대역
+├── site.yml                    # 지금은 vms 에 common 만 적용
+└── roles/common                # ✅ 작성됨
+```
+`group_vars/vault.yml`과 나머지 role(host, k8s_*, mysql, jenkins, monitoring)은 아직 없다.
+
+### 8-1. 실행
+```bash
+sudo apt install ansible-core     # 호스트 PC, 1회
+cd ansible
+ansible vms -m ping               # 7대 모두 pong 이어야 한다
+ansible-playbook site.yml --check --diff     # 바뀔 내용 미리 보기
+ansible-playbook site.yml                    # 적용
+ansible-playbook site.yml --limit k8s-worker3 --tags fail2ban   # 일부만
+```
+- 처음 `--check`에서는 아직 설치되지 않은 패키지(chrony, fail2ban, node_exporter)의 설정 단계를 건너뛴다. 설치 후에는 모두 미리 볼 수 있다.
+- Ansible 키(`keys/ansible.pub`의 짝)가 `~/.ssh/ansible_key`가 아니면 `ANSIBLE_PRIVATE_KEY_FILE=<경로>`를 붙인다.
+- 처음 보는 VM 호스트 키는 자동으로 받는다. VM을 다시 만들어 키가 바뀌면 `ssh-keygen -R 192.168.56.xx` 후 다시 실행한다.
+
+### 8-2. common role
+| 태그 | 내용 |
+|---|---|
+| (항상) | 접속 계정이 `AllowUsers`에 있는지, eth1에 인벤토리 주소가 있는지 먼저 확인. 아니면 멈춤(잠금 방지) |
+| `chrony` | chrony 설치·실행(timesyncd 대체, Ubuntu 기본 NTS 서버). 시간대가 KST가 아니면 맞춤 |
+| `hosts` | `/etc/hosts`에 인벤토리 전체(VM 7대, `lab-host`, `lab-laptop`) 등록 |
+| `ssh` | `sshd_config.d/10-hardening.conf`: root 로그인·비밀번호 로그인 금지, 키 인증만, `AllowUsers devops vagrant` |
+| `fail2ban` | sshd jail, journald 읽기, 호스트 .1 차단 예외(5회/10분 → 1시간) |
+| `node_exporter` | Ubuntu 패키지, eth1 주소 `:9100`에서만 수신 |
+| `tailscale` | `100.64.0.0/10 via 192.168.56.1 dev eth1` 경로(지금 바로 + netplan `60-tailscale-route.yaml`로 재부팅 후에도) |
+
+- `vagrant` 계정은 `vagrant ssh`·`vagrant provision`(공개키 배포)에 필요해서 허용한다. 빼면 키 배포가 안 된다.
+- `authorized_keys`는 Ansible에서 건드리지 않는다(`keys/` + `vagrant provision`으로만 관리).
+
+### 8-3. 호스트 SNAT 끄기 (common 적용 후)
+VM 7대에 복귀 경로가 들어가도 **노트북(.2)에는 아직 없다**(host role 예정). 노트북까지 경로를 넣은 뒤에 끈다.
+```bash
+ssh k8s-worker3 'ip route show 100.64.0.0/10'     # 모든 VM·노트북에서 via 192.168.56.1 확인
+sudo tailscale set --snat-subnet-routes=false      # 호스트 PC
+# 되돌리기: sudo tailscale set --snat-subnet-routes=true
 ```
 
+### 8-4. 앞으로 만들 role
 | 순서 | role | 내용 |
 |---|---|---|
-| 1 | common | chrony, /etc/hosts, SSH 하드닝, fail2ban, node_exporter, Tailscale 복귀 경로 → 호스트 SNAT 끔 |
-| 1 | host | 호스트·노트북: node_exporter. 노트북: ufw, fail2ban |
+| 1 | host | 호스트·노트북: node_exporter. 노트북: ufw, fail2ban, Tailscale 복귀 경로 |
 | 2 | k8s_node / master / worker | containerd, kubeadm(node-ip=eth1, pod CIDR 10.244.0.0/16, serverTLSBootstrap), zone 라벨 |
 | 2 | mysql | MySQL 8.4, `taxi_dev`·`taxi_prod`, utf8mb4, ufw 3306은 .22~.24만, mysqld_exporter |
 | 2 | jenkins | Docker, Jenkins(JCasC), 동시 빌드 1개 |
 | 3 | k8s_master | Calico(`interface=eth1`) → Argo CD → 루트 Application |
 | 3 | monitoring | Prometheus(30일), Alertmanager→Slack, Grafana, Loki(7일) |
 | 4 | host | healthchecks.io cron, DB 백업 cron |
-
-- `authorized_keys`는 Ansible에서 건드리지 않는다(`keys/` + `vagrant provision`으로만 관리).
-- SSH 하드닝 전에 `devops` 키 로그인을 먼저 확인한다.
 
 ## 9. 브랜치 규칙
 
@@ -246,13 +284,13 @@ ansible/
 
 | 경로 | 설명 |
 |---|---|
-| `Vagrantfile` | VM 7대 정의. 머신(host/laptop) 자동 구분, 스펙, IP, SSH 포트(2201~2208) |
+| `Vagrantfile` | VM 7대 정의. 머신(host/laptop)을 br-lab 주소로 구분, 박스 버전 고정, 스펙, IP, SSH 포트(2201~2208) |
 | `scripts/bootstrap.sh` | 최소 부트스트랩: KST, swap 해제, SSH 호스트 키 재생성, `devops` 계정, sudo NOPASSWD, 공개키 배포, 루트 볼륨 확장 |
 | `scripts/install-autostart.sh` | 머신 재부팅 시 VM 자동 기동(systemd) 등록 |
 | `keys/` | 팀원 공개키(`*.pub`)만 |
 | `docs/architecture.md` | 노션 「프로젝트 아키텍처」 전체 사본 |
 | `docs/*.png` | 아키텍처 그림 (전체, VM 배치, 네트워크, CD, 모니터링) |
-| `ansible/` | (예정) 서버 설정 |
+| `ansible/` | 서버 설정. 지금은 inventory, ansible.cfg, common role (§8) |
 
 ## 알아둘 점
 - **스냅샷:** `vagrant snapshot save <이름> base-clean`으로 초기 상태를 저장해 두면 복구가 쉽다. 같은 디스크에 저장되므로 백업은 아니다.

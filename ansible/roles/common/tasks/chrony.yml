@@ -1,0 +1,12 @@
+# chrony 패키지가 systemd-timesyncd 를 대신한다. 시간 서버는 Ubuntu 기본(ntp.ubuntu.com, NTS)을 쓴다.
+# 시간대는 bootstrap.sh 가 맞추지만, 다르면 여기서 다시 맞춘다.
+- name: 시간대
+  ansible.builtin.command: timedatectl set-timezone {{ timezone }}
+  when: ansible_facts.date_time.tz != 'KST'
+  changed_when: true
+
+- name: chrony 실행
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true
