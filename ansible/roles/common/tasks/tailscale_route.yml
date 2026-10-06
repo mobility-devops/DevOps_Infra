@@ -1,0 +1,22 @@
+# 팀원(Tailscale 100.64.0.0/10)에게 가는 응답을 호스트(.1)로 보내는 경로.
+# 호스트 Tailscale 의 SNAT 를 끄면 팀원별 IP 가 그대로 보이게 되는데, 이 경로가 없으면 응답이 NAT(eth0)로 나가 끊긴다.
+# Vagrant 가 만드는 50-vagrant.yaml 과 별도 파일로 두어 `vagrant reload` 에도 남게 한다.
+- name: 복귀 경로 (netplan, 재부팅 후에도 유지)
+  ansible.builtin.template:
+    src: netplan-tailscale-route.yaml.j2
+    dest: /etc/netplan/60-tailscale-route.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Validate netplan
+
+# netplan apply 는 eth1 을 잠깐 다시 올리므로(Ansible 접속도 eth1), 지금 상태에는 경로만 바로 넣는다.
+- name: 현재 경로 확인
+  ansible.builtin.command: ip -4 route show {{ tailscale_cidr }}
+  register: tailscale_route_now
+  changed_when: false
+
+- name: 복귀 경로 (지금 바로 적용)
+  ansible.builtin.command: ip -4 route replace {{ tailscale_cidr }} via {{ lab_host_ip }} dev {{ lab_iface }}
+  when: ('via ' ~ lab_host_ip ~ ' dev ' ~ lab_iface) not in tailscale_route_now.stdout
+  changed_when: true

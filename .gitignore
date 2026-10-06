@@ -14,3 +14,4 @@ id_*
 # Ansible
 *.retry
 .vault_pass*
+ansible/.ansible/

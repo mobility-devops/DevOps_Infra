@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[DEFAULT]
+ignoreip = {{ fail2ban_ignoreip | join(' ') }}
+bantime = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+# 로그 파일 대신 journald 를 읽는다(python3-systemd 필요).
+backend = systemd
+
+[sshd]
+enabled = true

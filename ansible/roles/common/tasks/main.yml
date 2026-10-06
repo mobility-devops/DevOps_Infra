@@ -1,0 +1,35 @@
+- name: 사전 확인
+  ansible.builtin.import_tasks: preflight.yml
+  tags: [always]
+
+- name: 패키지
+  ansible.builtin.apt:
+    name: [chrony, fail2ban, python3-systemd]
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [chrony, fail2ban]
+
+- name: 시간 (chrony)
+  ansible.builtin.import_tasks: chrony.yml
+  tags: [chrony]
+
+- name: /etc/hosts
+  ansible.builtin.import_tasks: hosts.yml
+  tags: [hosts]
+
+- name: SSH 하드닝
+  ansible.builtin.import_tasks: ssh.yml
+  tags: [ssh]
+
+- name: fail2ban
+  ansible.builtin.import_tasks: fail2ban.yml
+  tags: [fail2ban]
+
+- name: node_exporter
+  ansible.builtin.import_tasks: node_exporter.yml
+  tags: [node_exporter]
+
+- name: Tailscale 복귀 경로
+  ansible.builtin.import_tasks: tailscale_route.yml
+  when: tailscale_return_route | bool
+  tags: [tailscale]
