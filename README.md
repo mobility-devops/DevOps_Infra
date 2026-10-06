@@ -238,7 +238,7 @@ ansible-playbook site.yml --check --diff     # 바뀔 내용 미리 보기
 ansible-playbook site.yml                    # 적용
 ansible-playbook site.yml --limit k8s-worker3 --tags fail2ban   # 일부만
 ```
-- Ansible 키(`keys/ansible.pub`의 짝)가 `~/.ssh/ansible`이 아니면 `ANSIBLE_PRIVATE_KEY_FILE=<경로>`를 붙인다.
+- Ansible 키(`keys/ansible.pub`의 짝)가 `~/.ssh/ansible_key`가 아니면 `ANSIBLE_PRIVATE_KEY_FILE=<경로>`를 붙인다.
 - 처음 보는 VM 호스트 키는 자동으로 받는다. VM을 다시 만들어 키가 바뀌면 `ssh-keygen -R 192.168.56.xx` 후 다시 실행한다.
 
 ### 8-2. common role
