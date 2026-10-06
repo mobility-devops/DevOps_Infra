@@ -220,7 +220,7 @@ ssh k8s-master 'hostname; date; swapon --show | wc -l; sudo -n true && echo sudo
 
 ```
 ansible/
-├── ansible.cfg                 # inventory, remote_user=devops, 키 ~/.ssh/ansible
+├── ansible.cfg                 # inventory, remote_user=devops, 키 ~/.ssh/ansible_key
 ├── .ansible-lint
 ├── inventory/hosts.yml         # vms(ci, k8s_master, k8s_workers, db, mon) + machines(lab-host, lab-laptop)
 ├── group_vars/all.yml          # br-lab 대역, eth1, 호스트 .1, Tailscale 대역
