@@ -1,9 +1,0 @@
-# common role — 대상: VM 7대 공통
-# 할 일(README §8):
-#   - chrony(시간 동기화)
-#   - /etc/hosts
-#   - SSH 하드닝(root·비밀번호 로그인 금지, AllowUsers devops vagrant)
-#   - fail2ban(호스트 .1 예외)
-#   - node_exporter(eth1:9100)
-#   - Tailscale 복귀 경로(100.64.0.0/10 via 192.168.56.1)
-[]

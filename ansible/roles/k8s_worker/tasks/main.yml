@@ -1,5 +1,0 @@
-# k8s_worker role — 대상: worker 3대
-# 할 일(README §8):
-#   - kubeadm join
-#   - zone 라벨(topology.kubernetes.io/zone=host|laptop)
-[]

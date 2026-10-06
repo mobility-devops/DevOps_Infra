@@ -1,6 +1,0 @@
-# k8s_master role — 대상: Control Plane
-# 할 일(README §8):
-#   - kubeadm init(pod CIDR 10.244.0.0/16, serverTLSBootstrap)
-#   - Calico(interface=eth1)
-#   - Argo CD → 루트 Application
-[]

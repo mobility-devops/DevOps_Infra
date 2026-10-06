@@ -1,7 +1,0 @@
-# mysql role — 대상: db-01
-# 할 일(README §8):
-#   - MySQL 8.4
-#   - taxi_dev·taxi_prod, utf8mb4
-#   - ufw 3306은 worker(.22~.24)만
-#   - mysqld_exporter
-[]
