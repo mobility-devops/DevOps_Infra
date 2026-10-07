@@ -1,0 +1,44 @@
+groups:
+  - name: taxi-prod-slo-records
+    rules:
+      - record: taxi_prod:http_requests:rate5m
+        expr: sum(rate(http_server_requests_seconds_count{namespace="taxi-prod", uri!~"/actuator.*"}[5m]))
+      - record: taxi_prod:http_errors:rate5m
+        expr: sum(rate(http_server_requests_seconds_count{namespace="taxi-prod", uri!~"/actuator.*", status=~"5.."}[5m]))
+      - record: taxi_prod:http_fast_requests:rate5m
+        expr: sum(rate(http_server_requests_seconds_bucket{namespace="taxi-prod", uri!~"/actuator.*", le="0.5"}[5m]))
+{% for w in ['5m', '30m', '1h', '6h'] %}
+      - record: taxi_prod:http_error_ratio:rate{{ w }}
+        expr: |
+          sum(rate(http_server_requests_seconds_count{namespace="taxi-prod", uri!~"/actuator.*", status=~"5.."}[{{ w }}]))
+            / sum(rate(http_server_requests_seconds_count{namespace="taxi-prod", uri!~"/actuator.*"}[{{ w }}]))
+{% endfor %}
+
+  - name: taxi-prod
+    rules:
+      - alert: ProdReplicasUnavailable
+        expr: (sum(kube_pod_status_ready{namespace="taxi-prod", condition="true", pod=~"{{ app_pod_regex }}"}) or vector(0)) == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "taxi-prod에 준비된 앱 Pod가 없습니다"
+          runbook_url: "{{ runbook_base_url }}/ProdReplicasUnavailable.md"
+
+      - alert: ErrorBudgetFastBurn
+        expr: taxi_prod:http_error_ratio:rate1h > (14.4 * 0.01) and taxi_prod:http_error_ratio:rate5m > (14.4 * 0.01)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "에러 예산이 빠르게 소진되고 있습니다 (1h·5m 에러율 14.4% 초과)"
+          runbook_url: "{{ runbook_base_url }}/ErrorBudgetBurn.md"
+
+      - alert: ErrorBudgetSlowBurn
+        expr: taxi_prod:http_error_ratio:rate6h > (6 * 0.01) and taxi_prod:http_error_ratio:rate30m > (6 * 0.01)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "에러 예산이 꾸준히 소진되고 있습니다 (6h·30m 에러율 6% 초과)"
+          runbook_url: "{{ runbook_base_url }}/ErrorBudgetBurn.md"
