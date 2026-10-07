@@ -1,0 +1,7 @@
+---
+- name: Apply common configuration to VMs
+  hosts: vms
+  become: true
+
+  roles:
+    - common
