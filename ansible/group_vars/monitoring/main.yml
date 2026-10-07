@@ -1,0 +1,23 @@
+prometheus_version: "v3.15.0"
+alertmanager_version: "v0.34.1"     # 0.26 이상 (url_file)
+loki_version: "3.7.8"               # v 없음
+grafana_version: "13.2.3"           # v 없음
+
+host_wired_nic: "enp3s0"            # TODO: 호스트 PC 유선 랜포트 이름. 파트 B(B0)에서 확인 후 수정
+runbook_base_url: "https://github.com/mobility-devops/DevOps_Docs/blob/main/runbooks"
+
+# 파트 D·E 에서 true 로 바꿈
+monitoring_cluster_rules: false
+monitoring_app_rules: false
+
+# node_exporter 수집 대상 9개. 인벤토리(PR #6)에는 devops-server 의 IP 와 일부 zone 이 없어서 여기에 직접 적는다.
+monitoring_node_targets:
+  - { name: devops-server, ip: 192.168.56.1,  zone: host }
+  - { name: laptop-01,     ip: 192.168.56.2,  zone: laptop }
+  - { name: ci-01,         ip: 192.168.56.11, zone: host }
+  - { name: k8s-master,    ip: 192.168.56.21, zone: host }
+  - { name: k8s-worker1,   ip: 192.168.56.22, zone: host }
+  - { name: k8s-worker2,   ip: 192.168.56.23, zone: host }
+  - { name: k8s-worker3,   ip: 192.168.56.24, zone: laptop }
+  - { name: db-01,         ip: 192.168.56.31, zone: host }
+  - { name: mon-01,        ip: 192.168.56.41, zone: host }
