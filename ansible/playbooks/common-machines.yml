@@ -1,0 +1,7 @@
+---
+- name: Apply common configuration to physical machines
+  hosts: machines
+  become: true
+
+  roles:
+    - common
