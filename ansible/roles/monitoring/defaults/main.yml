@@ -1,0 +1,17 @@
+monitoring_dir: /opt/monitoring
+
+prometheus_retention_time: 30d       # SLO 30일 ✅
+prometheus_retention_size: 25GB      # 디스크 50GB 보호
+loki_retention: 168h                 # 7일 ✅
+
+prometheus_mem_limit: 1536m          # mon-01 4GB 안에서 배분
+loki_mem_limit: 1024m
+grafana_mem_limit: 384m
+alertmanager_mem_limit: 128m
+
+# 접속 허용
+monitoring_admin_sources: ["192.168.56.1", "100.64.0.0/10"]      # SSH: 호스트(Ansible) + 팀원(Tailscale, SNAT 끔). 네트워크 그림 「SSH ← 호스트·팀원」
+monitoring_ui_sources: ["192.168.56.1", "100.64.0.0/10"]         # 화면: 호스트 + 팀원
+k8s_node_ips: "{{ (groups['k8s_master'] + groups['k8s_workers']) | map('extract', hostvars, 'ansible_host') | list }}"
+
+app_pod_regex: "taxi-.*"             # prod 앱 Pod 이름 (Rollout 이름에 맞춤)
