@@ -120,3 +120,40 @@
     state: enabled
     policy: deny
     direction: incoming
+
+# --------------------------------------------------
+# JCasC (Configuration as Code)
+# --------------------------------------------------
+- name: Create JCasC directory
+  ansible.builtin.file:
+    path: "{{ jenkins_casc_dir }}"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0750"
+
+- name: Deploy JCasC configuration
+  ansible.builtin.template:
+    src: jenkins.yaml.j2
+    dest: "{{ jenkins_casc_dir }}/jenkins.yaml"
+    owner: jenkins
+    group: jenkins
+    mode: "0640"
+  notify: Restart Jenkins
+
+- name: Create Jenkins systemd override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/jenkins.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point Jenkins to JCasC directory
+  ansible.builtin.template:
+    src: casc-override.conf.j2
+    dest: /etc/systemd/system/jenkins.service.d/casc.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Jenkins

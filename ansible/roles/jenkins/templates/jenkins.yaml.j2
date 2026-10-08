@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+jenkins:
+  systemMessage: "{{ jenkins_system_message }}"
+  numExecutors: 1
+  mode: NORMAL
+  slaveAgentPort: -1
+  disableRememberMe: false
+  markupFormatter: plainText
+  crumbIssuer: standard
+  securityRealm:
+    local:
+      allowsSignup: false
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: "{{ jenkins_url }}"
