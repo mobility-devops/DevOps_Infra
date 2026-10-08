@@ -1,0 +1,219 @@
+---
+# --------------------------------------------------
+# MySQL 8.4 LTS 설치
+# --------------------------------------------------
+- name: Install Python libraries for Ansible modules
+  ansible.builtin.apt:
+    name:
+      - python3-pymysql   # ansible.mysql
+      - python3-debian    # deb822_repository
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create apt keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download MySQL repository key
+  ansible.builtin.get_url:
+    url: "{{ mysql_repo_key_url }}"
+    dest: /etc/apt/keyrings/mysql.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add MySQL 8.4 LTS apt repository
+  ansible.builtin.deb822_repository:
+    name: mysql
+    types: deb
+    uris: https://repo.mysql.com/apt/ubuntu
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: "{{ mysql_repo_component }}"
+    signed_by: /etc/apt/keyrings/mysql.asc
+    state: present
+
+- name: Install MySQL server
+  ansible.builtin.apt:
+    name: mysql-community-server
+    state: present
+    update_cache: true
+
+- name: Configure MySQL (bind, utf8mb4, UTC)
+  ansible.builtin.template:
+    src: taxi.cnf.j2
+    dest: /etc/mysql/mysql.conf.d/taxi.cnf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart MySQL
+
+- name: Ensure MySQL is enabled and started
+  ansible.builtin.service:
+    name: mysql
+    state: started
+    enabled: true
+
+- name: Apply MySQL config before creating schemas
+  ansible.builtin.meta: flush_handlers
+
+# --------------------------------------------------
+# 스키마와 계정 (root 는 unix socket 인증)
+# --------------------------------------------------
+- name: Create app databases
+  ansible.mysql.mysql_db:
+    name: "{{ item.name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_0900_ai_ci
+    state: present
+    login_unix_socket: "{{ mysql_socket }}"
+  loop: "{{ mysql_app_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create app users (own schema only)
+  ansible.mysql.mysql_user:
+    name: "{{ item.name }}"
+    host: "{{ mysql_app_host }}"
+    plugin: caching_sha2_password
+    plugin_auth_string: "{{ item.password }}"
+    update_password: on_create
+    priv: "{{ item.name }}.*:ALL"
+    state: present
+    login_unix_socket: "{{ mysql_socket }}"
+  loop: "{{ mysql_app_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Create exporter user
+  ansible.mysql.mysql_user:
+    name: exporter
+    host: localhost
+    plugin: caching_sha2_password
+    plugin_auth_string: "{{ mysql_exporter_password }}"
+    update_password: on_create
+    priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+    resource_limits:
+      MAX_USER_CONNECTIONS: 3
+    state: present
+    login_unix_socket: "{{ mysql_socket }}"
+  no_log: true
+
+# --------------------------------------------------
+# mysqld_exporter (:9104)
+# --------------------------------------------------
+- name: Create mysqld_exporter system user
+  ansible.builtin.user:
+    name: mysqld_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Create mysqld_exporter directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /opt/mysqld_exporter, group: root, mode: "0755" }
+    - { path: /etc/mysqld_exporter, group: mysqld_exporter, mode: "0750" }
+
+- name: Download mysqld_exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ mysql_exporter_version }}/{{ mysql_exporter_archive }}.tar.gz"
+    dest: "/opt/mysqld_exporter/{{ mysql_exporter_archive }}.tar.gz"
+    checksum: "sha256:{{ mysql_exporter_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extract mysqld_exporter
+  ansible.builtin.unarchive:
+    src: "/opt/mysqld_exporter/{{ mysql_exporter_archive }}.tar.gz"
+    dest: /opt/mysqld_exporter
+    remote_src: true
+    creates: "/opt/mysqld_exporter/{{ mysql_exporter_archive }}/mysqld_exporter"
+
+- name: Install mysqld_exporter binary
+  ansible.builtin.copy:
+    src: "/opt/mysqld_exporter/{{ mysql_exporter_archive }}/mysqld_exporter"
+    dest: /usr/local/bin/mysqld_exporter
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart mysqld_exporter
+
+- name: Configure mysqld_exporter credentials
+  ansible.builtin.template:
+    src: exporter.my.cnf.j2
+    dest: /etc/mysqld_exporter/my.cnf
+    owner: root
+    group: mysqld_exporter
+    mode: "0640"
+  diff: false
+  notify: Restart mysqld_exporter
+
+- name: Install mysqld_exporter systemd unit
+  ansible.builtin.template:
+    src: mysqld_exporter.service.j2
+    dest: /etc/systemd/system/mysqld_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart mysqld_exporter
+
+- name: Ensure mysqld_exporter is enabled and started
+  ansible.builtin.systemd_service:
+    name: mysqld_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# --------------------------------------------------
+# ufw (SSH 먼저 허용 → 마지막에 활성화)
+# --------------------------------------------------
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    port: "22"
+    proto: tcp
+    comment: ssh
+  loop: "{{ mysql_ssh_sources }}"
+
+- name: Allow MySQL from k8s workers
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    port: "3306"
+    proto: tcp
+    comment: mysql
+  loop: "{{ mysql_client_sources }}"
+
+- name: Allow node_exporter and mysqld_exporter scrape
+  community.general.ufw:
+    rule: allow
+    src: "{{ item.0 }}"
+    port: "{{ item.1 }}"
+    proto: tcp
+    comment: metrics
+  loop: "{{ mysql_metrics_sources | product(['9100', '9104']) | list }}"
+
+- name: Enable ufw with default deny incoming
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming

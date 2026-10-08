@@ -1,0 +1,29 @@
+---
+# MySQL 8.4 LTS (Oracle 공식 apt 저장소, Ubuntu 기본은 8.0)
+# 서명 키 지문 BCA4...785C, 2027-10-23 만료 (2023 파일은 만료됨)
+mysql_repo_key_url: https://repo.mysql.com/RPM-GPG-KEY-mysql-2025
+mysql_repo_component: mysql-8.4-lts
+mysql_socket: /var/run/mysqld/mysqld.sock
+
+# 앱 스키마와 계정 (이름은 CD 인수인계 매뉴얼 기준, 비밀번호는 vault.yml)
+mysql_app_databases:
+  - name: taxi_dev
+    password: "{{ vault_mysql_taxi_dev_password }}"
+  - name: taxi_prod
+    password: "{{ vault_mysql_taxi_prod_password }}"
+# 앱 계정 접속 허용 범위 (Pod 트래픽은 worker 노드 IP로 SNAT 됨)
+mysql_app_host: 192.168.56.%
+
+# mysqld_exporter
+mysql_exporter_version: 0.20.0
+mysql_exporter_archive: "mysqld_exporter-{{ mysql_exporter_version }}.linux-amd64"
+mysql_exporter_sha256: 5773496e9962ca3817b3599fe4d74f218c95c1295eb2a742462df8e035fe51bd
+mysql_exporter_password: "{{ vault_mysql_exporter_password }}"
+
+# ufw 허용 출발지
+mysql_ssh_sources:
+  - "{{ lab_gateway }}"     # 호스트 (Ansible)
+  - "{{ tailscale_cidr }}"  # 팀원 (Tailscale)
+  - 10.0.2.2                # Vagrant NAT (vagrant ssh / halt / provision)
+mysql_client_sources: "{{ groups['k8s_workers'] | map('extract', hostvars, 'ansible_host') | list }}"
+mysql_metrics_sources: "{{ groups['monitoring'] | map('extract', hostvars, 'ansible_host') | list }}"
