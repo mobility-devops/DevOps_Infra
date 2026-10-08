@@ -1,0 +1,99 @@
+---
+- name: Check whether worker is already joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Configure kubelet node IP and zone label
+  ansible.builtin.copy:
+    dest: /etc/default/kubelet
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      KUBELET_EXTRA_ARGS=--node-ip={{ ansible_host }} --node-labels=topology.kubernetes.io/zone={{ zone }}
+  notify: Restart kubelet
+
+# --------------------------------------------------
+# Join (미참여 노드만, 15분 토큰, 로그에 남기지 않음)
+# --------------------------------------------------
+- name: Create join command on control plane
+  ansible.builtin.command: kubeadm token create --ttl 15m --print-join-command
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  register: kubeadm_join_command
+  changed_when: false
+  no_log: true
+  when: not kubelet_conf.stat.exists
+
+- name: Join worker to Kubernetes cluster
+  ansible.builtin.command: "{{ kubeadm_join_command.stdout }}"
+  no_log: true
+  when: not kubelet_conf.stat.exists
+
+- name: Ensure kubelet is enabled and started
+  ansible.builtin.service:
+    name: kubelet
+    state: started
+    enabled: true
+
+# --------------------------------------------------
+# kubelet serving 인증서 (serverTLSBootstrap)
+# kubelet-csr-approver(GitOps)가 올라오기 전까지 이 노드 요청만 승인
+# --------------------------------------------------
+- name: Check kubelet serving certificate
+  ansible.builtin.stat:
+    path: /var/lib/kubelet/pki/kubelet-server-current.pem
+  register: kubelet_serving_cert
+
+- name: Wait for kubelet serving CSR of this node
+  ansible.builtin.shell: |
+    set -o pipefail
+    kubectl get csr --no-headers \
+      --field-selector spec.signerName=kubernetes.io/kubelet-serving \
+      | awk '/Pending/ && /system:node:{{ inventory_hostname }}/ {print $1}'
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  register: kubelet_serving_csr
+  until: kubelet_serving_csr.stdout | length > 0
+  retries: 12
+  delay: 5
+  changed_when: false
+  when: not kubelet_serving_cert.stat.exists
+
+- name: Approve kubelet serving CSR of this node
+  ansible.builtin.command: "kubectl certificate approve {{ kubelet_serving_csr.stdout_lines | join(' ') }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  when: not kubelet_serving_cert.stat.exists
+
+# --------------------------------------------------
+# Ready·zone 라벨
+# --------------------------------------------------
+- name: Wait for worker node to become Ready
+  ansible.builtin.command: "kubectl wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=300s"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  changed_when: false
+
+- name: Get zone label of worker node
+  ansible.builtin.command: >-
+    kubectl get node {{ inventory_hostname }}
+    -o 'jsonpath={.metadata.labels.topology\.kubernetes\.io/zone}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  register: worker_zone_label
+  changed_when: false
+  check_mode: false
+
+- name: Set zone label of worker node
+  ansible.builtin.command: "kubectl label node {{ inventory_hostname }} topology.kubernetes.io/zone={{ zone }} --overwrite"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  when: worker_zone_label.stdout != zone
