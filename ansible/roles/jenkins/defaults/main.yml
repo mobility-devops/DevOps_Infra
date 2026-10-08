@@ -1,0 +1,21 @@
+---
+# apt 저장소 서명 키 (Jenkins 2023 키는 2026-03-26 만료)
+jenkins_repo_key_url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+trivy_repo_key_url: https://get.trivy.dev/deb/public.key
+
+# Jenkins 실행·빌드에 필요한 패키지
+jenkins_packages:
+  - openjdk-21-jre
+  - fontconfig
+  - git
+
+# ufw 허용 출발지
+jenkins_ssh_sources:
+  - "{{ lab_gateway }}"     # 호스트 (Ansible)
+  - "{{ tailscale_cidr }}"  # 팀원 (Tailscale)
+  - 10.0.2.2                # Vagrant NAT (vagrant ssh / halt / provision)
+jenkins_ui_sources:
+  - "{{ lab_gateway }}"
+  - "{{ tailscale_cidr }}"
+jenkins_metrics_sources:
+  - 192.168.56.41           # mon-01 Prometheus → node_exporter
