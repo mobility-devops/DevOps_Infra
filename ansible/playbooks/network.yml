@@ -1,0 +1,14 @@
+---
+- name: Configure Tailscale return route on VMs
+  hosts: vms
+  become: true
+
+  roles:
+    - network
+
+- name: Configure Tailscale return route on laptop
+  hosts: laptop-01
+  become: true
+
+  roles:
+    - network
