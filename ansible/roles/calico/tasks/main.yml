@@ -1,0 +1,106 @@
+---
+- name: Create Calico manifest directory
+  ansible.builtin.file:
+    path: "{{ calico_manifest_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Calico manifests
+  ansible.builtin.get_url:
+    url: "{{ calico_manifest_base_url }}/{{ item }}"
+    dest: "{{ calico_manifest_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - operator-crds.yaml
+    - tigera-operator.yaml
+
+- name: Render Calico custom resources
+  ansible.builtin.template:
+    src: custom-resources.yaml.j2
+    dest: "{{ calico_manifest_dir }}/custom-resources.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+# --------------------------------------------------
+# CRD·Operator (CRD 파일이 커서 apply 대신 create, 없을 때만)
+# --------------------------------------------------
+- name: Check Calico operator CRDs
+  ansible.builtin.command: kubectl get crd installations.operator.tigera.io
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_crd_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install Calico CRDs
+  ansible.builtin.command: "kubectl create -f {{ calico_manifest_dir }}/operator-crds.yaml"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: calico_crd_check.rc != 0
+
+- name: Check Tigera operator
+  ansible.builtin.command: kubectl get deployment tigera-operator -n tigera-operator
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: tigera_operator_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install Tigera operator
+  ansible.builtin.command: "kubectl create -f {{ calico_manifest_dir }}/tigera-operator.yaml"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: tigera_operator_check.rc != 0
+
+- name: Wait for Tigera operator
+  ansible.builtin.command: kubectl rollout status deployment/tigera-operator -n tigera-operator --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+# --------------------------------------------------
+# Installation·APIServer
+# --------------------------------------------------
+- name: Check Calico installation resource
+  ansible.builtin.command: kubectl get installations.operator.tigera.io default
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_installation_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Operator가 기본값을 채우므로 apply 대신 최초 1회만 생성 (IP Pool 대역은 생성 후 변경 불가)
+- name: Create Calico custom resources
+  ansible.builtin.command: "kubectl create -f {{ calico_manifest_dir }}/custom-resources.yaml"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: calico_installation_check.rc != 0
+
+- name: Wait for Calico components to become available
+  ansible.builtin.command: >-
+    kubectl get tigerastatus {{ item }}
+    -o 'jsonpath={.status.conditions[?(@.type=="Available")].status}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_status
+  until: calico_status.stdout == "True"
+  retries: 30
+  delay: 10
+  changed_when: false
+  loop:
+    - calico
+    - apiserver
+
+- name: Wait for control plane node to become Ready
+  ansible.builtin.command: "kubectl wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=180s"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
