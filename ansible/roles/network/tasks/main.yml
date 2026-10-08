@@ -1,0 +1,30 @@
+---
+- name: Install Tailscale return route service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tailscale-return-route.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Configure return route for Tailscale clients
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/sbin/ip route replace {{ tailscale_cidr }} via {{ lab_gateway }}
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - Reload systemd
+    - Restart Tailscale return route
+
+- name: Enable Tailscale return route service
+  ansible.builtin.systemd:
+    name: tailscale-return-route.service
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,0 +1,10 @@
+---
+# Docker apt 저장소에 사용할 CPU 아키텍처 이름
+docker_apt_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"
+
+# /etc/docker/daemon.json 내용
+docker_daemon_options:
+  log-driver: json-file
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
