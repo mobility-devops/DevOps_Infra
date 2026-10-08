@@ -7,3 +7,6 @@ kubernetes_packages:
   - kubelet
   - kubeadm
   - kubectl
+
+# containerd sandbox(pause) 이미지. kubeadm config images list 의 pause 버전과 맞춤
+containerd_sandbox_image: "registry.k8s.io/pause:3.10.2"

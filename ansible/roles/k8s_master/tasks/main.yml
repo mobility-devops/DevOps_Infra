@@ -1,0 +1,126 @@
+---
+# --------------------------------------------------
+# kubeadm init
+# --------------------------------------------------
+- name: Create Kubernetes configuration directory
+  ansible.builtin.file:
+    path: /etc/kubernetes
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy kubeadm configuration
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: /etc/kubernetes/kubeadm-config.yaml
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate kubeadm configuration
+  ansible.builtin.command: kubeadm config validate --config /etc/kubernetes/kubeadm-config.yaml
+  changed_when: false
+  check_mode: false
+
+- name: Check whether control plane is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_admin_conf
+
+- name: Initialize Kubernetes control plane
+  ansible.builtin.command: kubeadm init --config /etc/kubernetes/kubeadm-config.yaml
+  when: not kubeadm_admin_conf.stat.exists
+
+# --------------------------------------------------
+# kubeconfig (master devops 계정)
+# --------------------------------------------------
+- name: Create kubeconfig directory for devops user
+  ansible.builtin.file:
+    path: /home/devops/.kube
+    state: directory
+    owner: devops
+    group: devops
+    mode: "0700"
+
+- name: Copy admin kubeconfig for devops user
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/devops/.kube/config
+    remote_src: true
+    owner: devops
+    group: devops
+    mode: "0600"
+
+# --------------------------------------------------
+# kubelet serving 인증서 (serverTLSBootstrap)
+# kubelet-csr-approver(GitOps)가 올라오기 전까지 이 노드 요청만 승인
+# --------------------------------------------------
+- name: Check kubelet serving certificate
+  ansible.builtin.stat:
+    path: /var/lib/kubelet/pki/kubelet-server-current.pem
+  register: kubelet_serving_cert
+
+- name: Wait for kubelet serving CSR of this node
+  ansible.builtin.shell: |
+    set -o pipefail
+    kubectl get csr --no-headers \
+      --field-selector spec.signerName=kubernetes.io/kubelet-serving \
+      | awk '/Pending/ && /system:node:{{ inventory_hostname }}/ {print $1}'
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: kubelet_serving_csr
+  until: kubelet_serving_csr.stdout | length > 0
+  retries: 12
+  delay: 5
+  changed_when: false
+  when: not kubelet_serving_cert.stat.exists
+
+- name: Approve kubelet serving CSR of this node
+  ansible.builtin.command: "kubectl certificate approve {{ kubelet_serving_csr.stdout_lines | join(' ') }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not kubelet_serving_cert.stat.exists
+
+# --------------------------------------------------
+# 호스트(devops-server) kubeconfig·kubectl
+# --------------------------------------------------
+- name: Create kubeconfig directory on host
+  ansible.builtin.file:
+    path: "{{ k8s_host_kubeconfig | dirname }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Fetch admin kubeconfig to host
+  ansible.builtin.fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ k8s_host_kubeconfig }}"
+    flat: true
+
+- name: Restrict host kubeconfig permissions
+  ansible.builtin.file:
+    path: "{{ k8s_host_kubeconfig }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+
+- name: Create local bin directory on host
+  ansible.builtin.file:
+    path: "{{ k8s_host_bin_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: Install kubectl on host
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ k8s_kubernetes_version }}/bin/linux/amd64/kubectl"
+    checksum: "sha256:https://dl.k8s.io/release/{{ k8s_kubernetes_version }}/bin/linux/amd64/kubectl.sha256"
+    dest: "{{ k8s_host_bin_dir }}/kubectl"
+    mode: "0755"
+  delegate_to: localhost
+  become: false
