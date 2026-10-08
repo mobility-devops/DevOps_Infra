@@ -12,12 +12,21 @@ groups:
     rules:
       - alert: InstanceDown
         expr: up{job="node", zone="host"} == 0
-        for: 2m
+        for: 1m
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: "호스트 쪽 머신이 응답하지 않습니다"
           runbook_url: "{{ runbook_base_url }}/InstanceDown.md"
+
+      - alert: MultipleWorkersDown
+        expr: count(up{job="node", instance=~"k8s-worker.*"} == 0) >= 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "worker 2대 이상이 응답하지 않습니다. 남은 worker 1대로 운영 중"
+          runbook_url: "{{ runbook_base_url }}/MultipleWorkersNotReady.md"
 
       - alert: LaptopTargetDown
         expr: up{job="node", zone="laptop"} == 0
@@ -50,23 +59,14 @@ groups:
 
       - alert: DiskAlmostFull
         expr: |
-          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"}
-            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"} < 0.05
+          node_filesystem_avail_bytes{instance=~"db-01|k8s-worker.*", fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"}
+            / node_filesystem_size_bytes{instance=~"db-01|k8s-worker.*", fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"} < 0.10
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "디스크 남은 공간이 5% 미만입니다"
+          summary: "디스크 남은 공간이 10% 미만입니다 (DB 정지 또는 Pod 퇴출 직전)"
           runbook_url: "{{ runbook_base_url }}/DiskAlmostFull.md"
-
-      - alert: MemoryLow
-        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "사용 가능한 메모리가 10% 미만입니다"
-          runbook_url: "{{ runbook_base_url }}/MemoryLow.md"
 
   - name: mysql
     rules:
@@ -78,12 +78,3 @@ groups:
         annotations:
           summary: "MySQL 또는 mysqld_exporter가 응답하지 않습니다"
           runbook_url: "{{ runbook_base_url }}/MySQLDown.md"
-
-      - alert: MySQLConnectionsHigh
-        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.8
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "MySQL 연결 수가 max_connections의 80%를 넘었습니다"
-          runbook_url: "{{ runbook_base_url }}/MySQLConnectionsHigh.md"

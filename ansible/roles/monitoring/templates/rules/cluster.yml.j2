@@ -4,7 +4,7 @@ groups:
       - alert: ClusterMetricsMissing
         expr: absent_over_time(up{job="kube-state-metrics"}[5m])
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: "클러스터 지표가 5분 동안 들어오지 않습니다 (Alloy 또는 kube-state-metrics 이상)"
           runbook_url: "{{ runbook_base_url }}/ClusterMetricsMissing.md"
@@ -26,11 +26,3 @@ groups:
         annotations:
           summary: "worker 2대 이상이 NotReady입니다. 남은 worker 1대로 운영 중"
           runbook_url: "{{ runbook_base_url }}/MultipleWorkersNotReady.md"
-
-      - alert: PodCrashLooping
-        expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
-        labels:
-          severity: warning
-        annotations:
-          summary: "Pod가 15분 동안 3번 넘게 재시작했습니다"
-          runbook_url: "{{ runbook_base_url }}/PodCrashLooping.md"

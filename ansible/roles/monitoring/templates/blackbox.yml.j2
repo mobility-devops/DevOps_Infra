@@ -1,0 +1,17 @@
+modules:
+  http_prod:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      preferred_ip_protocol: ip4
+      headers:
+        Host: "{{ prod_probe_host }}"
+      tls_config:
+        server_name: "{{ prod_probe_host }}"
+{% if prod_probe_ca_cert | length > 0 %}
+        ca_file: /etc/blackbox/ca.crt
+{% else %}
+        insecure_skip_verify: true
+{% endif %}

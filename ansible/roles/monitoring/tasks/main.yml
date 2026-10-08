@@ -1,3 +1,11 @@
+- name: prod 응답 확인 설정 점검 (app 경보를 켤 때는 주소가 있어야 ProdEndpointDown 이 동작)
+  ansible.builtin.assert:
+    that:
+      - prod_probe_host | length > 0
+      - prod_probe_path | length > 0
+    fail_msg: "monitoring_app_rules 가 true 인데 prod_probe_host 또는 prod_probe_path 가 비어 있습니다"
+  when: monitoring_app_rules | bool
+
 - name: 방화벽 (SSH 먼저 허용한 뒤 켬)
   ansible.builtin.import_tasks: firewall.yml
 
@@ -11,6 +19,7 @@
     - grafana/provisioning/datasources
     - grafana/provisioning/dashboards
     - grafana/dashboards
+    - blackbox
     - secrets
 
 - name: 비밀값 디렉터리 (컨테이너 사용자 소유)
@@ -84,6 +93,21 @@
     mode: "0644"
   notify: reload alertmanager
 
+- name: blackbox 설정 (prod 응답 확인)
+  ansible.builtin.template:
+    src: blackbox.yml.j2
+    dest: "{{ monitoring_dir }}/blackbox/blackbox.yml"
+    mode: "0644"
+  notify: restart blackbox
+
+- name: blackbox CA 인증서 (자체 CA 공개 인증서)
+  ansible.builtin.copy:
+    content: "{{ prod_probe_ca_cert }}"
+    dest: "{{ monitoring_dir }}/blackbox/ca.crt"
+    mode: "0644"
+  when: prod_probe_ca_cert | length > 0
+  notify: restart blackbox
+
 - name: Grafana provisioning·대시보드
   ansible.builtin.copy:
     src: grafana/
@@ -110,6 +134,14 @@
     check-config /etc/alertmanager/alertmanager.yml
   changed_when: false
 
+- name: 설정 검사 - blackbox
+  ansible.builtin.command: >
+    docker run --rm
+    -v {{ monitoring_dir }}/blackbox:/etc/blackbox:ro
+    prom/blackbox-exporter:{{ blackbox_version }}
+    --config.file=/etc/blackbox/blackbox.yml --config.check
+  changed_when: false
+
 - name: 스택 실행
   community.docker.docker_compose_v2:
     project_src: "{{ monitoring_dir }}"
@@ -128,6 +160,7 @@
     - http://localhost:9093/-/ready
     - http://localhost:3100/ready
     - http://localhost:3000/api/health
+    - http://127.0.0.1:9115/-/healthy
 
 - name: 변경된 설정 적용
   ansible.builtin.meta: flush_handlers

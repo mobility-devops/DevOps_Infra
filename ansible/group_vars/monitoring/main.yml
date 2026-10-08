@@ -21,3 +21,11 @@ monitoring_node_targets:
   - { name: k8s-worker3,   ip: 192.168.56.24, zone: laptop }
   - { name: db-01,         ip: 192.168.56.31, zone: host }
   - { name: mon-01,        ip: 192.168.56.41, zone: host }
+
+# prod 응답 확인 (ProdEndpointDown). blackbox_exporter 가 1분마다 Gateway 를 거쳐 prod health 를 호출한다
+blackbox_version: "v0.29.0"         # prom/* 이미지라 v 를 붙인다
+prod_probe_ip: "192.168.56.200"     # Gateway VIP (아키텍처 4장). 이름 대신 IP 로 호출해 DNS 문제로 오경보가 나지 않게 한다
+prod_probe_host: ""                 # TODO(CD): prod 이름. 예) taxi.192-168-56-200.sslip.io
+prod_probe_path: ""                 # TODO(CD): health 경로. 예) /actuator/health
+prod_probe_ca_cert: ""              # TODO(CD): 자체 CA 루트 인증서(공개용, PEM). 비어 있으면 인증서 검사를 건너뜀
+# prod_probe_host 와 prod_probe_path 가 모두 채워져야 확인을 시작한다

@@ -59,6 +59,18 @@ services:
       - ./secrets/grafana/admin_password:/run/secrets/grafana_admin_password:ro
       - grafana_data:/var/lib/grafana
 
+  blackbox:
+    image: prom/blackbox-exporter:{{ blackbox_version }}
+    container_name: blackbox
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: {{ blackbox_mem_limit }}
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+      - --web.listen-address=127.0.0.1:9115             # 같은 서버의 Prometheus 만 호출 (밖에서 못 씀)
+    volumes:
+      - ./blackbox:/etc/blackbox:ro
+
 volumes:
   prometheus_data:
   alertmanager_data:

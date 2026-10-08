@@ -27,3 +27,9 @@
     project_src: "{{ monitoring_dir }}"
     services: [grafana]
     state: restarted
+
+- name: restart blackbox
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    services: [blackbox]
+    state: restarted

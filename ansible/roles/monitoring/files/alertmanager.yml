@@ -12,7 +12,6 @@ route:
       repeat_interval: 1m        # 기본 4h면 healthchecks가 끊긴 것으로 판단
     - matchers: ['severity="critical"']
       receiver: slack-critical
-      repeat_interval: 1h
 
 receivers:
   - name: healthchecks
@@ -35,6 +34,8 @@ receivers:
 inhibit_rules:
   - source_matchers: ['alertname="LaptopLinkDown"']
     target_matchers: ['alertname=~"LaptopTargetDown|Worker3NotReady"']
+  - source_matchers: ['alertname="MultipleWorkersDown"']
+    target_matchers: ['alertname="MultipleWorkersNotReady"']
   - source_matchers: ['severity="critical"']
     target_matchers: ['severity="warning"']
     equal: [alertname, instance, mountpoint]     # mountpoint 가 없는 경보는 양쪽 모두 빈 값이라 그대로 같다고 봄
