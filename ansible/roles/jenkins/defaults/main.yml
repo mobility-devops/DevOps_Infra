@@ -19,3 +19,8 @@ jenkins_ui_sources:
   - "{{ tailscale_cidr }}"
 jenkins_metrics_sources:
   - 192.168.56.41           # mon-01 Prometheus → node_exporter
+
+# JCasC (Configuration as Code 플러그인 필요, 사용자·Credentials 는 넣지 않음)
+jenkins_casc_dir: /var/lib/jenkins/casc_configs
+jenkins_url: "http://{{ ansible_host }}:8080/"
+jenkins_system_message: "DevOps Project CI (ci-01). 설정은 JCasC 로 관리됨: 변경은 DevOps_Infra roles/jenkins 에서 할 것"
