@@ -17,7 +17,7 @@ groups:
           severity: critical
         annotations:
           summary: "prod 주소가 2분 동안 응답하지 않습니다 (Gateway 경유 health 확인 실패)"
-          runbook_url: "{{ runbook_base_url }}/ProdEndpointDown.md"
+          runbook_url: "{{ runbook_base_url }}/prod-endpoint-down.md"
 
       - alert: ProdReplicasUnavailable
         expr: (sum(kube_pod_status_ready{namespace="taxi-prod", condition="true", pod=~"{{ app_pod_regex }}"}) or vector(0)) == 0
@@ -26,4 +26,4 @@ groups:
           severity: critical
         annotations:
           summary: "taxi-prod에 준비된 앱 Pod가 없습니다"
-          runbook_url: "{{ runbook_base_url }}/ProdReplicasUnavailable.md"
+          runbook_url: "{{ runbook_base_url }}/prod-replicas-unavailable.md"

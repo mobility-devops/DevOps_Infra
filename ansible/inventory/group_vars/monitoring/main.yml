@@ -3,7 +3,7 @@ alertmanager_version: "v0.34.1"     # 0.26 이상 (url_file)
 loki_version: "3.7.8"               # v 없음
 grafana_version: "13.2.3"           # v 없음
 
-host_wired_nic: "enp3s0"            # TODO: 호스트 PC 유선 랜포트 이름. 파트 B(B0)에서 확인 후 수정
+host_wired_nic: "eno1"              # 호스트 PC 유선 랜포트 (br-lab 에 붙은 장치, `ip -br link show master br-lab` 로 확인)
 runbook_base_url: "https://github.com/mobility-devops/DevOps_Docs/blob/main/runbooks"
 
 # 파트 D·E 에서 true 로 바꿈
@@ -24,6 +24,7 @@ monitoring_node_targets:
 
 # prod 응답 확인 (ProdEndpointDown). blackbox_exporter 가 1분마다 Gateway 를 거쳐 prod health 를 호출한다
 blackbox_version: "v0.29.0"         # prom/* 이미지라 v 를 붙인다
+prod_probe_scheme: "http"          # Gateway 가 아직 HTTP 만 받음 (CD 회신). cert-manager 가 들어오면 "https" 로 바꾸고 prod_probe_ca_cert 를 채운다
 prod_probe_ip: "192.168.56.200"     # Gateway VIP (아키텍처 4장). 이름 대신 IP 로 호출해 DNS 문제로 오경보가 나지 않게 한다
 prod_probe_host: ""                 # TODO(CD): prod 이름. 예) taxi.192-168-56-200.sslip.io
 prod_probe_path: ""                 # TODO(CD): health 경로. 예) /actuator/health

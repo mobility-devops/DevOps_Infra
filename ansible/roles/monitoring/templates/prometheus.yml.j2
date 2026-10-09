@@ -39,7 +39,7 @@ scrape_configs:
     params:
       module: [http_prod]
     static_configs:
-      - targets: ["https://{{ prod_probe_ip }}{{ prod_probe_path }}"]
+      - targets: ["{{ prod_probe_scheme }}://{{ prod_probe_ip }}{{ prod_probe_path }}"]
         labels: { instance: prod }
     relabel_configs:
       - source_labels: [__address__]
