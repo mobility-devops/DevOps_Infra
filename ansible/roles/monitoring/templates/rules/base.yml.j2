@@ -1,0 +1,80 @@
+groups:
+  - name: watchdog
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "모니터링 파이프라인 생존 신호 (항상 울림)"
+
+  - name: machines
+    rules:
+      - alert: InstanceDown
+        expr: up{job="node", zone="host"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 쪽 머신이 응답하지 않습니다"
+          runbook_url: "{{ runbook_base_url }}/instance-down.md"
+
+      - alert: MultipleWorkersDown
+        expr: count(up{job="node", instance=~"k8s-worker.*"} == 0) >= 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "worker 2대 이상이 응답하지 않습니다. 남은 worker 1대로 운영 중"
+          runbook_url: "{{ runbook_base_url }}/multiple-workers-not-ready.md"
+
+      - alert: LaptopTargetDown
+        expr: up{job="node", zone="laptop"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "노트북 또는 worker3이 응답하지 않습니다 (prod는 호스트 worker가 응답)"
+          runbook_url: "{{ runbook_base_url }}/laptop-down.md"
+
+      - alert: LaptopLinkDown
+        expr: node_network_carrier{instance="devops-server", device="{{ host_wired_nic }}"} == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트-노트북 랜선 연결이 끊겼습니다"
+          runbook_url: "{{ runbook_base_url }}/laptop-down.md"
+
+      - alert: DiskAlmostFull
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"} < 0.15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "디스크 남은 공간이 15% 미만입니다"
+          runbook_url: "{{ runbook_base_url }}/disk-almost-full.md"
+
+      - alert: DiskAlmostFull
+        expr: |
+          node_filesystem_avail_bytes{instance=~"db-01|k8s-worker.*", fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"}
+            / node_filesystem_size_bytes{instance=~"db-01|k8s-worker.*", fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"} < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "디스크 남은 공간이 10% 미만입니다 (DB 정지 또는 Pod 퇴출 직전)"
+          runbook_url: "{{ runbook_base_url }}/disk-almost-full.md"
+
+  - name: mysql
+    rules:
+      - alert: MySQLDown
+        expr: mysql_up == 0 or up{job="mysqld"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySQL 또는 mysqld_exporter가 응답하지 않습니다"
+          runbook_url: "{{ runbook_base_url }}/mysql-down.md"

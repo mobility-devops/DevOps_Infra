@@ -1,0 +1,34 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9095
+
+common:
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+schema_config:
+  configs:
+    - from: "2026-10-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: {{ loki_retention }}
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true             # 없으면 retention_period가 무시됨
+  delete_request_store: filesystem    # Loki 3.x는 retention을 켜면 필수

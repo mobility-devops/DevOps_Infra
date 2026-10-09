@@ -1,0 +1,166 @@
+- name: prod 응답 확인 설정 점검 (app 경보를 켤 때는 주소가 있어야 ProdEndpointDown 이 동작)
+  ansible.builtin.assert:
+    that:
+      - prod_probe_host | length > 0
+      - prod_probe_path | length > 0
+    fail_msg: "monitoring_app_rules 가 true 인데 prod_probe_host 또는 prod_probe_path 가 비어 있습니다"
+  when: monitoring_app_rules | bool
+
+- name: 방화벽 (SSH 먼저 허용한 뒤 켬)
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: 디렉터리
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - rules
+    - grafana/provisioning/datasources
+    - grafana/provisioning/dashboards
+    - grafana/dashboards
+    - blackbox
+    - secrets
+
+- name: 비밀값 디렉터리 (컨테이너 사용자 소유)
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/secrets/{{ item.name }}"
+    state: directory
+    owner: "{{ item.uid }}"
+    group: root
+    mode: "0500"
+  loop:
+    - { name: alertmanager, uid: 65534 }   # Alertmanager 이미지는 nobody로 실행
+    - { name: grafana, uid: 472 }          # Grafana 이미지는 uid 472로 실행
+
+- name: 비밀값 파일
+  ansible.builtin.copy:
+    dest: "{{ monitoring_dir }}/secrets/{{ item.dir }}/{{ item.file }}"
+    content: "{{ item.value }}"
+    owner: "{{ item.uid }}"
+    group: root
+    mode: "0400"
+  loop:
+    - { dir: alertmanager, file: slack_critical,        uid: 65534, value: "{{ vault_slack_webhook_critical }}" }
+    - { dir: alertmanager, file: slack_warning,         uid: 65534, value: "{{ vault_slack_webhook_warning }}" }
+    - { dir: alertmanager, file: healthchecks_watchdog, uid: 65534, value: "{{ vault_healthchecks_watchdog_url }}" }
+    - { dir: grafana,      file: admin_password,        uid: 472,   value: "{{ vault_grafana_admin_password }}" }
+  no_log: true
+  notify: [reload alertmanager, restart grafana]
+
+- name: compose 파일
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ monitoring_dir }}/compose.yml"
+    mode: "0644"
+
+- name: Prometheus 설정
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_dir }}/prometheus.yml"
+    mode: "0644"
+  notify: reload prometheus
+
+- name: 경보·기록 규칙
+  ansible.builtin.template:
+    src: "rules/{{ item }}.yml.j2"
+    dest: "{{ monitoring_dir }}/rules/{{ item }}.yml"
+    mode: "0644"
+  loop: "{{ ['base'] + (['cluster'] if monitoring_cluster_rules | bool else []) + (['app'] if monitoring_app_rules | bool else []) }}"
+  notify: reload prometheus
+
+- name: 꺼진 스위치의 규칙 파일 제거
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/rules/{{ item.name }}.yml"
+    state: absent
+  loop:
+    - { name: cluster, enabled: "{{ monitoring_cluster_rules }}" }
+    - { name: app, enabled: "{{ monitoring_app_rules }}" }
+  when: not (item.enabled | bool)
+  notify: reload prometheus
+
+- name: Loki 설정
+  ansible.builtin.template:
+    src: loki.yml.j2
+    dest: "{{ monitoring_dir }}/loki.yml"
+    mode: "0644"
+  notify: restart loki
+
+- name: Alertmanager 설정 (Go 템플릿이 Jinja2와 겹쳐서 copy)
+  ansible.builtin.copy:
+    src: alertmanager.yml
+    dest: "{{ monitoring_dir }}/alertmanager.yml"
+    mode: "0644"
+  notify: reload alertmanager
+
+- name: blackbox 설정 (prod 응답 확인)
+  ansible.builtin.template:
+    src: blackbox.yml.j2
+    dest: "{{ monitoring_dir }}/blackbox/blackbox.yml"
+    mode: "0644"
+  notify: restart blackbox
+
+- name: blackbox CA 인증서 (자체 CA 공개 인증서)
+  ansible.builtin.copy:
+    content: "{{ prod_probe_ca_cert }}"
+    dest: "{{ monitoring_dir }}/blackbox/ca.crt"
+    mode: "0644"
+  when: prod_probe_ca_cert | length > 0
+  notify: restart blackbox
+
+- name: Grafana provisioning·대시보드
+  ansible.builtin.copy:
+    src: grafana/
+    dest: "{{ monitoring_dir }}/grafana/"
+    mode: "0644"
+    directory_mode: "0755"
+  notify: restart grafana
+
+- name: 설정 검사 - Prometheus (규칙 포함)
+  ansible.builtin.command: >
+    docker run --rm --entrypoint promtool
+    -v {{ monitoring_dir }}/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    -v {{ monitoring_dir }}/rules:/etc/prometheus/rules:ro
+    prom/prometheus:{{ prometheus_version }}
+    check config /etc/prometheus/prometheus.yml
+  changed_when: false
+
+- name: 설정 검사 - Alertmanager
+  ansible.builtin.command: >
+    docker run --rm --entrypoint amtool
+    -v {{ monitoring_dir }}/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    -v {{ monitoring_dir }}/secrets/alertmanager:/etc/alertmanager/secrets:ro
+    prom/alertmanager:{{ alertmanager_version }}
+    check-config /etc/alertmanager/alertmanager.yml
+  changed_when: false
+
+- name: 설정 검사 - blackbox
+  ansible.builtin.command: >
+    docker run --rm
+    -v {{ monitoring_dir }}/blackbox:/etc/blackbox:ro
+    prom/blackbox-exporter:{{ blackbox_version }}
+    --config.file=/etc/blackbox/blackbox.yml --config.check
+  changed_when: false
+
+- name: 스택 실행
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: present
+    pull: missing
+
+- name: 기동 대기
+  ansible.builtin.uri:
+    url: "{{ item }}"
+  register: ready
+  until: ready.status == 200
+  retries: 30
+  delay: 3
+  loop:
+    - http://localhost:9090/-/ready
+    - http://localhost:9093/-/ready
+    - http://localhost:3100/ready
+    - http://localhost:3000/api/health
+    - http://127.0.0.1:9115/-/healthy
+
+- name: 변경된 설정 적용
+  ansible.builtin.meta: flush_handlers

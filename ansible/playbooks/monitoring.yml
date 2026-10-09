@@ -1,0 +1,9 @@
+# 모니터링 플레이북. 실행: cd ansible && ansible-playbook playbooks/monitoring.yml
+# vault 비밀번호는 devops-server 의 ANSIBLE_VAULT_PASSWORD_FILE(~/.bashrc)로 자동 입력된다. 다른 곳에서는 --ask-vault-pass 를 붙인다.
+# site.yml 이 생기면 거기서 import_playbook 으로 불러 쓴다.
+- name: 모니터링 스택 (mon-01)
+  hosts: monitoring
+  become: true
+  roles:
+    - docker
+    - monitoring

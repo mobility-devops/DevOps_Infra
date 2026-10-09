@@ -1,0 +1,35 @@
+- name: reload prometheus
+  ansible.builtin.uri:
+    url: http://localhost:9090/-/reload
+    method: POST
+  register: r
+  until: r.status == 200
+  retries: 10
+  delay: 3
+
+- name: reload alertmanager
+  ansible.builtin.uri:
+    url: http://localhost:9093/-/reload
+    method: POST
+  register: r
+  until: r.status == 200
+  retries: 10
+  delay: 3
+
+- name: restart loki
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    services: [loki]
+    state: restarted
+
+- name: restart grafana
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    services: [grafana]
+    state: restarted
+
+- name: restart blackbox
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    services: [blackbox]
+    state: restarted

@@ -1,0 +1,28 @@
+groups:
+  - name: cluster
+    rules:
+      - alert: ClusterMetricsMissing
+        expr: absent_over_time(up{job="kube-state-metrics"}[5m])
+        labels:
+          severity: warning
+        annotations:
+          summary: "클러스터 지표가 5분 동안 들어오지 않습니다 (Alloy 또는 kube-state-metrics 이상)"
+          runbook_url: "{{ runbook_base_url }}/cluster-metrics-missing.md"
+
+      - alert: Worker3NotReady
+        expr: kube_node_status_condition{node="k8s-worker3", condition="Ready", status="true"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "worker3(노트북)이 NotReady입니다"
+          runbook_url: "{{ runbook_base_url }}/laptop-down.md"
+
+      - alert: MultipleWorkersNotReady
+        expr: count(kube_node_status_condition{node=~"k8s-worker.*", condition="Ready", status="true"} == 0) >= 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "worker 2대 이상이 NotReady입니다. 남은 worker 1대로 운영 중"
+          runbook_url: "{{ runbook_base_url }}/multiple-workers-not-ready.md"

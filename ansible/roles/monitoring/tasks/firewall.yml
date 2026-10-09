@@ -1,0 +1,37 @@
+- name: ufw 설치
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: SSH 허용 (ufw를 켜기 전에 반드시 먼저)
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    port: "22"
+    proto: tcp
+    comment: ssh
+  loop: "{{ monitoring_admin_sources }}"
+
+- name: 클러스터 노드 → Prometheus(remote_write, Canary 판정)·Loki
+  community.general.ufw:
+    rule: allow
+    src: "{{ item.0 }}"
+    port: "{{ item.1 }}"
+    proto: tcp
+    comment: monitoring-ingest
+  loop: "{{ k8s_node_ips | product(['9090', '3100']) | list }}"
+
+- name: 팀원·호스트 → Grafana, Prometheus, Alertmanager 화면
+  community.general.ufw:
+    rule: allow
+    src: "{{ item.0 }}"
+    port: "{{ item.1 }}"
+    proto: tcp
+    comment: monitoring-ui
+  loop: "{{ monitoring_ui_sources | product(['3000', '9090', '9093']) | list }}"
+
+- name: 기본 정책 (들어오는 것 차단, 나가는 것 허용) 후 켜기
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
