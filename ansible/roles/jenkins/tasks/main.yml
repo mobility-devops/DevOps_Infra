@@ -157,3 +157,11 @@
     group: root
     mode: "0644"
   notify: Restart Jenkins
+
+- name: Create Gradle cache directory for build containers
+  ansible.builtin.file:
+    path: "{{ jenkins_gradle_cache_dir }}"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0750"

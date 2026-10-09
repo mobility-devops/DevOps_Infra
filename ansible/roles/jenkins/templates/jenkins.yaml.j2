@@ -20,3 +20,40 @@ unclassified:
   gitHubPluginConfig:
     hookSecretConfigs:
       - credentialsId: "{{ jenkins_webhook_secret_id }}"
+
+jobs:
+  - script: |
+      multibranchPipelineJob('{{ jenkins_backend_job }}') {
+        description('{{ jenkins_backend_repo }} CI (Jenkinsfile). JCasC 로 관리됨: 변경은 DevOps_Infra roles/jenkins 에서 할 것')
+        branchSources {
+          branchSource {
+            source {
+              github {
+                id('{{ jenkins_backend_job }}')
+                repoOwner('{{ jenkins_backend_repo_owner }}')
+                repository('{{ jenkins_backend_repo }}')
+                repositoryUrl('https://github.com/{{ jenkins_backend_repo_owner }}/{{ jenkins_backend_repo }}')
+                configuredByUrl(false)
+                credentialsId('{{ jenkins_github_app_credential_id }}')
+                traits {
+                  gitHubBranchDiscovery {
+                    strategyId(1)
+                  }
+                  gitHubPullRequestDiscovery {
+                    strategyId(1)
+                  }
+                  headWildcardFilter {
+                    includes('develop main PR-*')
+                    excludes('')
+                  }
+                }
+              }
+            }
+          }
+        }
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(5)
+          }
+        }
+      }
