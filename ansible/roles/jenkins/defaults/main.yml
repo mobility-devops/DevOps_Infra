@@ -27,3 +27,12 @@ jenkins_system_message: "DevOps Project CI (ci-01). 설정은 JCasC 로 관리�
 
 # GitHub App webhook 서명 확인용 (credential 값은 Jenkins 에만 있음)
 jenkins_webhook_secret_id: github-webhook-secret
+
+# Multibranch Job (JCasC Job DSL). fork PR 은 발견하지 않음
+jenkins_backend_job: taxi-backend
+jenkins_backend_repo_owner: mobility-devops
+jenkins_backend_repo: DevOps_Backend
+jenkins_github_app_credential_id: github-app
+
+# 빌드 컨테이너가 같이 쓰는 Gradle 캐시 (Jenkinsfile 에서 /gradle-cache 로 연결)
+jenkins_gradle_cache_dir: /var/lib/jenkins/gradle-cache
