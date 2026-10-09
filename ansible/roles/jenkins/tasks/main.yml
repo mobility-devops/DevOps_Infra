@@ -1,0 +1,159 @@
+---
+- name: Install Java and build tools
+  ansible.builtin.apt:
+    name: "{{ jenkins_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create apt keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# --------------------------------------------------
+# Jenkins
+# --------------------------------------------------
+- name: Download Jenkins repository key
+  ansible.builtin.get_url:
+    url: "{{ jenkins_repo_key_url }}"
+    dest: /etc/apt/keyrings/jenkins.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Jenkins LTS apt repository
+  ansible.builtin.deb822_repository:
+    name: jenkins
+    types: deb
+    uris: https://pkg.jenkins.io/debian-stable
+    suites: binary/
+    signed_by: /etc/apt/keyrings/jenkins.asc
+    state: present
+
+- name: Install Jenkins
+  ansible.builtin.apt:
+    name: jenkins
+    state: present
+    update_cache: true
+
+- name: Ensure Jenkins is enabled and started
+  ansible.builtin.service:
+    name: jenkins
+    state: started
+    enabled: true
+
+- name: Add jenkins user to docker group
+  ansible.builtin.user:
+    name: jenkins
+    groups: docker
+    append: true
+  notify: Restart Jenkins
+
+# --------------------------------------------------
+# Trivy
+# --------------------------------------------------
+- name: Download Trivy repository key
+  ansible.builtin.get_url:
+    url: "{{ trivy_repo_key_url }}"
+    dest: /etc/apt/keyrings/trivy.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Trivy apt repository
+  ansible.builtin.deb822_repository:
+    name: trivy
+    types: deb
+    uris: https://get.trivy.dev/deb
+    suites: generic
+    components: main
+    signed_by: /etc/apt/keyrings/trivy.asc
+    state: present
+
+- name: Install Trivy
+  ansible.builtin.apt:
+    name: trivy
+    state: present
+    update_cache: true
+
+# --------------------------------------------------
+# Firewall (허용 규칙을 먼저 넣고 마지막에 활성화)
+# --------------------------------------------------
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    port: "22"
+    proto: tcp
+    comment: ssh
+  loop: "{{ jenkins_ssh_sources }}"
+
+- name: Allow Jenkins web UI
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    port: "8080"
+    proto: tcp
+    comment: jenkins-ui
+  loop: "{{ jenkins_ui_sources }}"
+
+- name: Allow node_exporter scrape
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+    port: "9100"
+    proto: tcp
+    comment: node-exporter
+  loop: "{{ jenkins_metrics_sources }}"
+
+- name: Enable ufw with default deny incoming
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+# --------------------------------------------------
+# JCasC (Configuration as Code)
+# --------------------------------------------------
+- name: Create JCasC directory
+  ansible.builtin.file:
+    path: "{{ jenkins_casc_dir }}"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0750"
+
+- name: Deploy JCasC configuration
+  ansible.builtin.template:
+    src: jenkins.yaml.j2
+    dest: "{{ jenkins_casc_dir }}/jenkins.yaml"
+    owner: jenkins
+    group: jenkins
+    mode: "0640"
+  notify: Restart Jenkins
+
+- name: Create Jenkins systemd override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/jenkins.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point Jenkins to JCasC directory
+  ansible.builtin.template:
+    src: casc-override.conf.j2
+    dest: /etc/systemd/system/jenkins.service.d/casc.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Jenkins

@@ -1,0 +1,12 @@
+---
+# Kubernetes apt 저장소 마이너 버전과 설치할 패키지 버전 (kind 검증 v1.37)
+kubernetes_minor_version: "v1.37"
+kubernetes_package_version: "1.37.1-1.1"
+
+kubernetes_packages:
+  - kubelet
+  - kubeadm
+  - kubectl
+
+# containerd sandbox(pause) 이미지. kubeadm config images list 의 pause 버전과 맞춤
+containerd_sandbox_image: "registry.k8s.io/pause:3.10.2"

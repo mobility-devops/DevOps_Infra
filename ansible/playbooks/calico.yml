@@ -1,0 +1,7 @@
+---
+- name: Install Calico CNI
+  hosts: k8s_master
+  become: true
+
+  roles:
+    - calico

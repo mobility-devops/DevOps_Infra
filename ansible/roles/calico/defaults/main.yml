@@ -1,0 +1,9 @@
+---
+calico_version: "v3.33.0"
+calico_manifest_base_url: "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests"
+calico_manifest_dir: /etc/kubernetes/calico
+
+# kubeadm podSubnet 과 동일해야 함
+calico_pod_cidr: "10.244.0.0/16"
+# 호스트 PC·노트북 두 물리 머신 사이 항상 캡슐화 (CD-guide 결정표 1번)
+calico_encapsulation: VXLAN

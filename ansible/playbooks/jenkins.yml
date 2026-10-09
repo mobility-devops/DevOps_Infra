@@ -1,0 +1,8 @@
+---
+- name: Configure Jenkins CI server
+  hosts: ci
+  become: true
+
+  roles:
+    - docker
+    - jenkins

@@ -1,0 +1,14 @@
+---
+# Control Plane 주소 (br-lab eth1. eth0 NAT 10.0.2.15 사용 방지)
+k8s_control_plane_ip: "{{ ansible_host }}"
+
+# Calico VXLAN 과 맞춤 (CD-guide). 랩·Tailscale·Docker 대역과 겹치지 않음
+k8s_pod_network_cidr: "10.244.0.0/16"
+k8s_service_cidr: "10.96.0.0/12"
+
+# k8s_node 의 kubernetes_package_version 과 같은 버전으로 맞출 것
+k8s_kubernetes_version: "v1.37.1"
+
+# devops-server(호스트)에 둘 kubeconfig·kubectl
+k8s_host_kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
+k8s_host_bin_dir: "{{ lookup('env', 'HOME') }}/.local/bin"
