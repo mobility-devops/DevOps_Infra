@@ -24,3 +24,6 @@ jenkins_metrics_sources:
 jenkins_casc_dir: /var/lib/jenkins/casc_configs
 jenkins_url: "http://{{ ansible_host }}:8080/"
 jenkins_system_message: "DevOps Project CI (ci-01). 설정은 JCasC 로 관리됨: 변경은 DevOps_Infra roles/jenkins 에서 할 것"
+
+# GitHub App webhook 서명 확인용 (credential 값은 Jenkins 에만 있음)
+jenkins_webhook_secret_id: github-webhook-secret

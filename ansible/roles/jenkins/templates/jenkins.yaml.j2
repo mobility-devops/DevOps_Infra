@@ -17,3 +17,6 @@ jenkins:
 unclassified:
   location:
     url: "{{ jenkins_url }}"
+  gitHubPluginConfig:
+    hookSecretConfigs:
+      - credentialsId: "{{ jenkins_webhook_secret_id }}"
