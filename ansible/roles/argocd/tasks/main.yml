@@ -1,0 +1,97 @@
+---
+# --------------------------------------------------
+# Helm
+# --------------------------------------------------
+- name: Create Helm directory
+  ansible.builtin.file:
+    path: "/opt/helm/{{ argocd_helm_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Helm
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/{{ argocd_helm_archive }}"
+    dest: "/opt/helm/{{ argocd_helm_version }}/{{ argocd_helm_archive }}"
+    checksum: "sha256:https://get.helm.sh/{{ argocd_helm_archive }}.sha256sum"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extract Helm
+  ansible.builtin.unarchive:
+    src: "/opt/helm/{{ argocd_helm_version }}/{{ argocd_helm_archive }}"
+    dest: "/opt/helm/{{ argocd_helm_version }}"
+    remote_src: true
+    creates: "/opt/helm/{{ argocd_helm_version }}/linux-amd64/helm"
+
+- name: Install Helm binary
+  ansible.builtin.copy:
+    src: "/opt/helm/{{ argocd_helm_version }}/linux-amd64/helm"
+    dest: /usr/local/bin/helm
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
+# --------------------------------------------------
+# Argo CD (GitOps values 그대로, 차트 버전 고정)
+# --------------------------------------------------
+- name: Create Argo CD directory
+  ansible.builtin.file:
+    path: "{{ argocd_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Download Argo CD values from GitOps repository
+  ansible.builtin.get_url:
+    url: "{{ argocd_values_url }}"
+    dest: "{{ argocd_dir }}/values.yaml"
+    force: true
+    owner: root
+    group: root
+    mode: "0640"
+  register: argocd_values
+
+- name: Get installed Argo CD release
+  ansible.builtin.command: "helm list -n {{ argocd_namespace }} -f '^{{ argocd_release }}$' -o json"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_release_info
+  changed_when: false
+  check_mode: false
+
+- name: Install or upgrade Argo CD
+  ansible.builtin.command: >-
+    helm upgrade --install {{ argocd_release }} argo-cd
+    --repo {{ argocd_chart_repo }}
+    --version {{ argocd_chart_version }}
+    -n {{ argocd_namespace }} --create-namespace
+    -f {{ argocd_dir }}/values.yaml
+    --wait --timeout 10m
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: true
+  when: >-
+    (argocd_release_info.stdout | from_json | length == 0)
+    or ((argocd_release_info.stdout | from_json)[0].chart != 'argo-cd-' ~ argocd_chart_version)
+    or argocd_values.changed
+
+- name: Wait for Argo CD deployments
+  ansible.builtin.command: "kubectl wait --for=condition=Available deployment --all -n {{ argocd_namespace }} --timeout=300s"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Check Application health customization from values
+  ansible.builtin.command: >-
+    kubectl get cm argocd-cm -n {{ argocd_namespace }}
+    -o 'jsonpath={.data.resource\.customizations\.health\.argoproj\.io_Application}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_health_cm
+  changed_when: false
+  failed_when: "'hs.status' not in argocd_health_cm.stdout"

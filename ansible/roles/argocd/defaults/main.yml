@@ -1,0 +1,13 @@
+---
+# Helm (k8s-master 에서 실행)
+argocd_helm_version: v4.3.0
+argocd_helm_archive: "helm-{{ argocd_helm_version }}-linux-amd64.tar.gz"
+
+# Argo CD 본체 (설정값은 CD 담당의 GitOps values 파일을 그대로 사용)
+argocd_chart_repo: https://argoproj.github.io/argo-helm
+argocd_chart_version: 10.10.0
+argocd_namespace: argocd
+argocd_release: argocd
+argocd_values_ref: main
+argocd_values_url: "https://raw.githubusercontent.com/mobility-devops/DevOps_GitOps/{{ argocd_values_ref }}/argocd/install/values.yaml"
+argocd_dir: /etc/kubernetes/argocd
