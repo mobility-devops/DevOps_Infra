@@ -7,7 +7,7 @@ host_wired_nic: "eno1"              # 호스트 PC 유선 랜포트 (br-lab 에 
 runbook_base_url: "https://github.com/mobility-devops/DevOps_Docs/blob/main/runbooks"
 
 # 파트 D·E 에서 true 로 바꿈
-monitoring_cluster_rules: false
+monitoring_cluster_rules: true
 monitoring_app_rules: false
 
 # node_exporter 수집 대상 9개. 인벤토리(PR #6)에는 devops-server 의 IP 와 일부 zone 이 없어서 여기에 직접 적는다.
