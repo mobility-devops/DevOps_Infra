@@ -8,7 +8,7 @@ runbook_base_url: "https://github.com/mobility-devops/DevOps_Docs/blob/main/runb
 
 # 파트 D·E 에서 true 로 바꿈
 monitoring_cluster_rules: true
-monitoring_app_rules: false
+monitoring_app_rules: true
 
 # node_exporter 수집 대상 9개. 인벤토리(PR #6)에는 devops-server 의 IP 와 일부 zone 이 없어서 여기에 직접 적는다.
 monitoring_node_targets:
@@ -26,7 +26,7 @@ monitoring_node_targets:
 blackbox_version: "v0.29.0"         # prom/* 이미지라 v 를 붙인다
 prod_probe_scheme: "http"          # Gateway 가 아직 HTTP 만 받음 (CD 회신). cert-manager 가 들어오면 "https" 로 바꾸고 prod_probe_ca_cert 를 채운다
 prod_probe_ip: "192.168.56.200"     # Gateway VIP (아키텍처 4장). 이름 대신 IP 로 호출해 DNS 문제로 오경보가 나지 않게 한다
-prod_probe_host: ""                 # TODO(CD): prod 이름. 예) taxi.192-168-56-200.sslip.io
-prod_probe_path: ""                 # TODO(CD): health 경로. 예) /actuator/health
+prod_probe_host: "taxi.192-168-56-200.sslip.io"   # prod 이름 (CD 확인 10-11)
+prod_probe_path: "/actuator/health/readiness"    # prod readiness (CD 합의 10-09)
 prod_probe_ca_cert: ""              # TODO(CD): 자체 CA 루트 인증서(공개용, PEM). 비어 있으면 인증서 검사를 건너뜀
 # prod_probe_host 와 prod_probe_path 가 모두 채워져야 확인을 시작한다
