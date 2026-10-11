@@ -1,0 +1,56 @@
+---
+# --------------------------------------------------
+# 백업 파일 확인 (devops-server)
+# --------------------------------------------------
+- name: Check Sealed Secrets key backup on control node
+  ansible.builtin.stat:
+    path: "{{ sealed_secrets_backup_file }}"
+  delegate_to: localhost
+  become: false
+  register: sealed_secrets_backup
+
+- name: Report missing key backup
+  ansible.builtin.debug:
+    msg: "열쇠 백업이 없어 복원을 건너뜁니다: {{ sealed_secrets_backup_file }} (첫 클러스터면 정상)"
+  when: not sealed_secrets_backup.stat.exists
+
+# --------------------------------------------------
+# 복원 (root 등록 전)
+# --------------------------------------------------
+- name: Restore Sealed Secrets keys
+  when: sealed_secrets_backup.stat.exists
+  block:
+    # copy 는 vault 로 암호화된 src 를 풀어서 보낸다 (vault 비밀번호: ANSIBLE_VAULT_PASSWORD_FILE)
+    - name: Copy decrypted key backup to control plane
+      ansible.builtin.copy:
+        src: "{{ sealed_secrets_backup_file }}"
+        dest: "{{ sealed_secrets_backup_dest }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Apply key backup
+      ansible.builtin.command: "kubectl apply -f {{ sealed_secrets_backup_dest }}"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: sealed_secrets_apply
+      # 새 클러스터에서 열쇠가 새로 생길 때만 변경으로 본다.
+      # 이미 있는 열쇠(컨트롤러가 만든 것)에 처음 apply 하면 last-applied 주석만 붙어 "configured"가 나오는데, 내용은 같다.
+      changed_when: "' created' in sealed_secrets_apply.stdout"
+
+    # 컨트롤러는 시작할 때 열쇠를 읽는다. root 등록 전이면 아직 없어서 건너뛴다.
+    - name: Restart controller if it is already running
+      ansible.builtin.command: kubectl rollout restart deploy/sealed-secrets-controller -n kube-system
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: sealed_secrets_apply.changed
+      register: sealed_secrets_restart
+      changed_when: sealed_secrets_restart.rc == 0
+      failed_when: false
+
+  always:
+    - name: Remove plaintext key from control plane
+      ansible.builtin.file:
+        path: "{{ sealed_secrets_backup_dest }}"
+        state: absent
