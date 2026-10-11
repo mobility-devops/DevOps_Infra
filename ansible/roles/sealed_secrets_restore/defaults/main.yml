@@ -1,0 +1,11 @@
+---
+# Sealed Secrets 열쇠 복원 (CD-guide [수정본] F1)
+# 클러스터를 새로 만들 때 root(App of Apps) 등록 전에 이전 열쇠를 넣어 둔다.
+# → 컨트롤러가 처음 뜰 때 새 열쇠를 만들지 않고 이 열쇠를 써서, Git의 SealedSecret(DB 비밀번호 등)을 그대로 푼다.
+
+# 열쇠 백업 파일 (CD가 devops-server에서 ansible-vault로 암호화해 만든 것, 저장소 밖)
+#   만드는 명령은 CD-guide [수정본] B2-1. 파일이 없으면(첫 클러스터) 이 Role은 아무것도 하지 않는다.
+sealed_secrets_backup_file: "{{ lookup('env', 'HOME') }}/.secrets/sealed-secrets-key-backup.vault.yaml"
+
+# master에 잠깐 풀어 둘 위치. 적용 후 바로 지운다.
+sealed_secrets_backup_dest: /etc/kubernetes/sealed-secrets-key-backup.yaml
