@@ -6,7 +6,7 @@ loki_retention: 168h                 # 7일 ✅
 
 prometheus_mem_limit: 1536m          # mon-01 4GB 안에서 배분
 loki_mem_limit: 1024m
-grafana_mem_limit: 384m
+grafana_mem_limit: 768m              # 384m 에서 OOM(exit 137, 10-11). 대시보드 5개 기준
 alertmanager_mem_limit: 128m
 blackbox_mem_limit: 64m
 
