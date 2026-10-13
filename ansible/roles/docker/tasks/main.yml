@@ -77,6 +77,32 @@
     validate: dockerd --validate --config-file=%s
   notify: Restart docker
 
+- name: Create Docker systemd override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure Docker service auto-restart
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.service.d/restart.conf
+    content: |
+      [Unit]
+      StartLimitIntervalSec=60s
+      StartLimitBurst=5
+
+      [Service]
+      Restart=on-failure
+      RestartSec=5s
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart docker
+
 - name: Ensure Docker is enabled and started
   ansible.builtin.service:
     name: docker

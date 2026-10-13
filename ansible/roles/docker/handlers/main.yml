@@ -1,4 +1,9 @@
 ---
+# handler 는 이 파일에 적힌 순서대로 실행된다. drop-in 을 읽은 뒤 재시작하도록 Reload 를 먼저 둔다.
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
 - name: Restart docker
   ansible.builtin.service:
     name: docker
