@@ -59,6 +59,18 @@
     state: present
     update_cache: true
 
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Add admin users to docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_group_users }}"
+
 - name: Create Docker configuration directory
   ansible.builtin.file:
     path: /etc/docker
