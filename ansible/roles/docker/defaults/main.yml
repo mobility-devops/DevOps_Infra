@@ -2,6 +2,10 @@
 # Docker apt 저장소에 사용할 CPU 아키텍처 이름
 docker_apt_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"
 
+# sudo 없이 docker 를 쓸 계정 (팀원 전원이 공용 devops 계정으로 접속한다)
+docker_group_users:
+  - "{{ ansible_user }}"
+
 # /etc/docker/daemon.json 내용
 docker_daemon_options:
   log-driver: json-file
